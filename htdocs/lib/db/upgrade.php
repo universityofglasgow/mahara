@@ -3166,5 +3166,61 @@ function xmldb_core_upgrade($oldversion=0) {
         change_field_default($table, $field);
     }
 
+    if ($oldversion < 2014032709) {
+        $where = array('callfunction' => 'auth_clean_expired_password_requests');
+        $data = array('callfunction' => 'auth_clean_expired_password_requests',
+                      'minute' => '5',
+                      'hour' => '0',
+                      'day' => '*',
+                      'month' => '*',
+                      'dayofweek' => '*',
+                      );
+        ensure_record_exists('cron', (object)$where, (object)$data);
+    }
+
+    // Delete leftover data which are not associated to any institution
+    if ($oldversion < 2014032710) {
+        // Institution collections
+        $collectionids = get_column_sql('
+            SELECT id
+            FROM {collection} c
+            WHERE c.institution IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM {institution} i WHERE i.name = c.institution)');
+        if ($collectionids) {
+            require_once(get_config('libroot') . 'collection.php');
+            $count = 0;
+            $limit = 200;
+            $total = count($collectionids);
+            foreach ($collectionids as $collectionid) {
+                $collection = new Collection($collectionid);
+                $collection->delete();
+                $count++;
+                if (($count % $limit) == 0) {
+                    log_debug("Deleting leftover collections: $count/$total");
+                    set_time_limit(30);
+                }
+            }
+            log_debug("Deleting leftover collections: $count/$total");
+        }
+        // Institution custom layouts and registration
+        delete_records_sql('
+            DELETE FROM {usr_custom_layout}
+            WHERE {usr_custom_layout}.institution IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM {institution} i WHERE i.name = {usr_custom_layout}.institution)');
+        delete_records_sql('
+            DELETE FROM {usr_registration}
+            WHERE {usr_registration}.institution IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM {institution} i WHERE i.name = {usr_registration}.institution)');
+    }
+
+    if ($oldversion < 2014032716) {
+        // Adding cacheversion, as an arbitrary number appended to the end of JS & CSS files in order
+        // to tell cacheing software when they've been updated. (Without having to use the Mahara
+        // minor version for that purpose.)
+        // Set this to a random starting number to make minor version slightly harder to detect
+        if (!get_config('cacheversion')) {
+            set_config('cacheversion', rand(1000, 9999));
+        }
+    }
     return $status;
 }

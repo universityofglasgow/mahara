@@ -24,6 +24,8 @@ function smarty_core() {
  * This function creates a Smarty object and sets it up for use within our
  * podclass app, setting up some variables.
  *
+ * WARNING: If you are using pieforms, set them up BEFORE calling this function.
+ *
  * The variables that it sets up are:
  *
  * - WWWROOT: The base url for the Mahara system
@@ -462,7 +464,9 @@ EOF;
        $sitename = 'Mahara';
     }
     $smarty->assign('sitename', $sitename);
-    $smarty->assign('sitelogo', $THEME->header_logo());
+    $sitelogo = $THEME->header_logo();
+    $sitelogo = append_version_number($sitelogo);
+    $smarty->assign('sitelogo', $sitelogo);
     $smarty->assign('sitelogo4facebook', $THEME->facebook_logo());
     $smarty->assign('sitedescription4facebook', get_string('facebookdescription', 'mahara'));
 
@@ -531,6 +535,8 @@ EOF;
     $javascript_array = append_version_number($javascript_array);
     $smarty->assign_by_ref('JAVASCRIPT', $javascript_array);
     $smarty->assign('RELEASE', get_config('release'));
+    $smarty->assign('SERIES', get_config('series'));
+    $smarty->assign('CACHEVERSION', get_config('cacheversion'));
     $siteclosedforupgrade = get_config('siteclosed');
     if ($siteclosedforupgrade && get_config('disablelogin')) {
         $smarty->assign('SITECLOSED', 'logindisabled');
@@ -1575,7 +1581,7 @@ function set_cookie($name, $value='', $expires=0, $access=false) {
     // If Cookie Consent is enabled with cc_necessary cookie set to 'yes'
     // or Cookie Consent is not enabled
     if (empty($_COOKIE['cc_necessary']) || (isset($_COOKIE['cc_necessary']) && $_COOKIE['cc_necessary'] == 'yes')) {
-        setcookie($name, $value, $expires, $url['path'], $domain, false, true);
+        setcookie($name, $value, $expires, $url['path'], $domain, is_https(), true);
     }
 
     if ($access) {  // View access cookies may be needed on this request
@@ -3800,6 +3806,7 @@ function mahara_http_request($config, $quiet=false) {
     $ch = curl_init();
 
     // standard curl_setopt stuff; configs passed to the function can override these
+    curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     if (!ini_get('open_basedir')) {
@@ -3847,6 +3854,59 @@ function mahara_http_request($config, $quiet=false) {
     }
 
     curl_close($ch);
+
+    return $result;
+}
+
+/**
+ * Fetch the true full url from a shorthand url by getting
+ * the location from the redirected header information.
+ *
+ * @param   string $url    The shorthand url eg https://goo.gl/maps/pZTiA
+ * @param   bool   $quiet  To record errors in the logs
+ *
+ * @return  object  $result Contains the short url, full url, the headers, and any errors
+ */
+function mahara_shorturl_request($url, $quiet=false) {
+    $ch = curl_init($url);
+
+    // standard curl_setopt stuff; configs passed to the function can override these
+    curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 1);
+
+    $result = new StdClass();
+    $result->shorturl = $url;
+    $result->data = curl_exec($ch);
+    $result->error = curl_error($ch);
+    $result->errno = curl_errno($ch);
+
+    if ($result->errno) {
+        if ($quiet) {
+            // When doing something unimportant like fetching rss feeds, some errors should not pollute the logs.
+            $dontcare = array(
+                CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT, CURLE_PARTIAL_FILE, CURLE_OPERATION_TIMEOUTED,
+                CURLE_GOT_NOTHING,
+            );
+            $quiet = in_array($result->errno, $dontcare);
+        }
+        if (!$quiet) {
+            log_warn('Curl error: ' . $result->errno . ': ' . $result->error);
+        }
+    }
+
+    curl_close($ch);
+
+    $fields = explode("\r\n", preg_replace('/\x0D\x0A[\x09\x20]+/', ' ', $result->data)); // Parse information
+    $result->fullurl = false;
+    foreach ($fields as $field) {
+        if (strpos($field, 'Location') !== false) {
+            $result->fullurl = str_replace('Location: ', '', $field);
+        }
+    }
 
     return $result;
 }
@@ -4024,20 +4084,20 @@ function append_version_number($urls) {
         $formattedurls = array();
         foreach ($urls as $url) {
             if (preg_match('/\?/',$url)) {
-                $url .= '&v=' . get_config('release');
+                $url .= '&v=' . get_config('cacheversion');
             }
             else {
-                $url .= '?v=' . get_config('release');
+                $url .= '?v=' . get_config('cacheversion');
             }
             $formattedurls[] = $url;
         }
         return $formattedurls;
     }
     if (preg_match('/\?/',$urls)) {
-        $urls .= '&v=' . get_config('release');
+        $urls .= '&v=' . get_config('cacheversion');
     }
     else {
-        $urls .= '?v=' . get_config('release');
+        $urls .= '?v=' . get_config('cacheversion');
     }
     return $urls;
 }

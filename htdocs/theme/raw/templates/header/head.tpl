@@ -1,4 +1,5 @@
 <head>
+    <meta name="generator" content="Mahara {$SERIES} (https://mahara.org)" />
     <meta http-equiv="Content-type" content="text/html; charset=UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=8; IE=9; IE=10" />
     <meta property="og:title" content="{$PAGETITLE}" />
@@ -33,10 +34,10 @@
 {foreach from=$STYLESHEETLIST item=cssurl}
     <link rel="stylesheet" type="text/css" href="{$cssurl}">
 {/foreach}
-    <link rel="stylesheet" type="text/css" href="{theme_url filename='style/print.css'}?v={$RELEASE}" media="print">
-    <script type="text/javascript" src="{$WWWROOT}js/css.js?v={$RELEASE}"></script>
-    <link rel="shortcut icon" href="{$WWWROOT}favicon.ico?v={$RELEASE}" type="image/vnd.microsoft.icon">
-    <link rel="image_src" href="{$sitelogo}?v={$RELEASE}">
+    <link rel="stylesheet" type="text/css" href="{theme_url filename='style/print.css'}?v={$CACHEVERSION}" media="print">
+    <script type="text/javascript" src="{$WWWROOT}js/css.js?v={$CACHEVERSION}"></script>
+    <link rel="shortcut icon" href="{$WWWROOT}favicon.ico?v={$CACHEVERSION}" type="image/vnd.microsoft.icon">
+    <link rel="image_src" href="{$sitelogo}">
 {if $ADDITIONALHTMLHEAD}{$ADDITIONALHTMLHEAD|safe}{/if}
 {if $COOKIECONSENTCODE}{$COOKIECONSENTCODE|safe}{/if}
 </head>

@@ -13,20 +13,17 @@ defined('INTERNAL') || die();
 require_once(get_config('libroot') . 'group.php');
 
 /**
- * Base artefact plugin class
- * @abstract
+ * Helper interface to hold the PluginArtefact's abstract static functions
  */
-abstract class PluginArtefact extends Plugin {
-
-    /** 
-     * This function returns a list of classnames 
+interface IPluginArtefact {
+    /**
+     * This function returns a list of classnames
      * of artefact types this plugin provides.
      * @abstract
      * @return array
      */
-    public static abstract function get_artefact_types();
+    public static function get_artefact_types();
 
-    
     /**
     * This function returns a list of classnames
     * of block types this plugin provides
@@ -34,16 +31,25 @@ abstract class PluginArtefact extends Plugin {
     * @abstract
     * @return array
     */
-    public static abstract function get_block_types();
-
+    public static function get_block_types();
 
     /**
      * This function returns the name of the plugin.
      * @abstract
      * @return string
      */
-    public static abstract function get_plugin_name();
+    public static function get_plugin_name();
+}
 
+/**
+ * Base artefact plugin class
+ * @abstract
+ */
+abstract class PluginArtefact extends Plugin implements IPluginArtefact {
+
+    public static function get_plugintype_name() {
+        return 'artefact';
+    }
 
     /**
      * This function returns an array of menu items
@@ -151,12 +157,51 @@ abstract class PluginArtefact extends Plugin {
     }
 }
 
-/** 
+/**
+ * Helper interface to hold the Artefact class's abstract static functions
+ */
+interface IArtefactType {
+    /**
+     * Returns a URL for an icon for the appropriate artefact
+     *
+     * @param array $options Options for the artefact. The array MUST have the
+     *                       'id' key, representing the ID of the artefact for
+     *                       which the icon is being generated. Other keys
+     *                       include 'size' for a [width]x[height] version of
+     *                       the icon, as opposed to the default 20x20, and
+     *                       'view' for the id of the view in which the icon is
+     *                       being displayed.
+     * @abstract
+     * @return string URL for the icon
+     */
+    public static function get_icon($options=null);
+
+    /**
+     * whether a user will have exactly 0 or 1 of this artefact type
+     * @abstract
+     */
+    public static function is_singular();
+
+    /**
+     * Returns a list of key => value pairs where the key is either '_default'
+     * or a language string, and value is a URL linking to that behaviour for
+     * this artefact type
+     *
+     * @param integer This is the ID of the artefact being linked to
+     */
+    public static function get_links($id);
+
+    // @TODO maybe uncomment this later and implement it everywhere
+    // when we know a bit more about what blocks we want.
+    //public function render_self($options);
+}
+
+/**
  * Base artefact type class
  * @abstract
  */
-abstract class ArtefactType {
-    
+abstract class ArtefactType implements IArtefactType {
+
     protected $dirty;
     protected $parentdirty;
     protected $deleted = false;
@@ -791,22 +836,6 @@ abstract class ArtefactType {
     }
 
 
-    /**
-     * Returns a URL for an icon for the appropriate artefact
-     *
-     * @param array $options Options for the artefact. The array MUST have the 
-     *                       'id' key, representing the ID of the artefact for 
-     *                       which the icon is being generated. Other keys 
-     *                       include 'size' for a [width]x[height] version of 
-     *                       the icon, as opposed to the default 20x20, and 
-     *                       'view' for the id of the view in which the icon is 
-     *                       being displayed.
-     * @abstract 
-     * @return string URL for the icon
-     */
-    public static abstract function get_icon($options=null);
-    
-
     // ******************** STATIC FUNCTIONS ******************** //
 
     public static function get_instances_by_userid($userid, $order, $offset, $limit) {
@@ -816,26 +845,6 @@ abstract class ArtefactType {
     public static function get_metadata_by_userid($userid, $order, $offset, $limit) {
         // @todo
     }
-
-    /**
-     * whether a user will have exactly 0 or 1 of this artefact type
-     * @abstract
-     */
-    public static abstract function is_singular();
-
-    /**
-     * Returns a list of key => value pairs where the key is either '_default'
-     * or a langauge string, and value is a URL linking to that behaviour for
-     * this artefact type
-     * 
-     * @param integer This is the ID of the artefact being linked to
-     */
-    public static abstract function get_links($id);
-
-    // @TODO maybe uncomment this later and implement it everywhere
-    // when we know a bit more about what blocks we want.
-    //public abstract function render_self($options);
-
 
     /**
     * Returns the printable name of this artefact
@@ -1581,17 +1590,35 @@ function artefact_can_render_to($type, $format) {
     return in_array($format, call_static_method(generate_artefact_class_name($type), 'get_render_list'));
 }
 
-function artefact_instance_from_id($id) {
-    $sql = 'SELECT a.*, i.plugin 
-            FROM {artefact} a 
+/**
+ * Get artefact instance from id
+ * @param int $id of the artefact
+ * @param int $deleting If we are wanting to delete the artefact we need
+ *                      to check that the artefact plugin still exists on
+ *                      the server.
+ *
+ * @result mixed    Either the artefact object or false if plugin has gone.
+ */
+function artefact_instance_from_id($id, $deleting = false) {
+    $sql = 'SELECT a.*, i.plugin
+            FROM {artefact} a
             JOIN {artefact_installed_type} i ON a.artefacttype = i.name
             WHERE a.id = ?';
     if (!$data = get_record_sql($sql, array($id))) {
         throw new ArtefactNotFoundException(get_string('artefactnotfound', 'mahara', $id));
     }
     $classname = generate_artefact_class_name($data->artefacttype);
-    safe_require('artefact', $data->plugin);
-    return new $classname($id, $data);
+    if ($deleting) {
+        safe_require('artefact', $data->plugin, 'lib.php', 'require_once', true);
+        if (is_callable($classname . '::delete')) {
+            return new $classname($id, $data);
+        }
+        return false;
+    }
+    else {
+        safe_require('artefact', $data->plugin);
+        return new $classname($id, $data);
+    }
 }
 /**
  * This function returns the current title of an artefact's blockinstance

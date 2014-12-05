@@ -1364,8 +1364,10 @@ function delete_user($userid) {
     if ($artefactids) {
         foreach ($artefactids as $artefactid) {
             try {
-                $a = artefact_instance_from_id($artefactid);
-                $a->delete();
+                $a = artefact_instance_from_id($artefactid, true);
+                if ($a) {
+                    $a->delete();
+                }
             }
             catch (ArtefactNotFoundException $e) {
                 // Awesome, it's already gone.
@@ -1384,6 +1386,10 @@ function delete_user($userid) {
     }
 
     handle_event('deleteuser', $userid);
+
+    // Destroy all active sessions of the deleted user
+    require_once(get_config('docroot') . 'auth/session.php');
+    remove_user_sessions($userid);
 
     db_commit();
 }
@@ -1556,7 +1562,7 @@ function load_user_institutions($userid) {
         throw new InvalidArgumentException("couldn't load institutions, no user id specified");
     }
     if ($institutions = get_records_sql_assoc('
-        SELECT u.institution,'.db_format_tsfield('ctime').','.db_format_tsfield('u.expiry', 'membership_expiry').',u.studentid,u.staff,u.admin,i.displayname,i.theme,i.registerallowed, i.showonlineusers,i.allowinstitutionpublicviews, i.logo, i.style, i.licensemandatory, i.licensedefault, i.dropdownmenu, i.skins
+        SELECT u.institution,'.db_format_tsfield('ctime').','.db_format_tsfield('u.expiry', 'membership_expiry').',u.studentid,u.staff,u.admin,i.displayname,i.theme,i.registerallowed, i.showonlineusers,i.allowinstitutionpublicviews, i.logo, i.style, i.licensemandatory, i.licensedefault, i.dropdownmenu, i.skins, i.suspended
         FROM {usr_institution} u INNER JOIN {institution} i ON u.institution = i.name
         WHERE u.usr = ? ORDER BY i.priority DESC', array($userid))) {
         return $institutions;
@@ -1899,7 +1905,7 @@ function get_institution_strings_for_users($userids) {
             $links = array();
             foreach ($value as $k => $v) {
                 $url = get_config('wwwroot').'institution/index.php?institution='.$k;
-                $links[] = get_string('institutionlink', 'mahara', $url, $v);
+                $links[] = get_string('institutionlink', 'mahara', $url, hsc($v));
             }
             switch ($key) {
                 case 'admin':
@@ -2042,6 +2048,9 @@ function acceptfriend_submit(Pieform $form, $values) {
     insert_record('usr_friend', $f);
 
     db_commit();
+
+    require_once('activity.php');
+    activity_occurred('maharamessage', $n);
 
     handle_event('addfriend', array('user' => $f->usr2, 'friend' => $f->usr1));
 
@@ -2547,6 +2556,32 @@ function anonymous_icon_url($maxwidth=40, $maxheight=40, $email=null) {
 }
 
 /**
+ * Return the remote avatar associated to the email.
+ * If the avatar does not exist, return anonymous avatar
+ *
+ * @param string  $email         Email address of the user
+ * @param object  $size          Maximum size of the image
+ * @returns string $url          The remote avatar URL
+ */
+function remote_avatar_url($email, $size) {
+    global $THEME;
+
+    // Available sizes of the 'no_userphoto' image:
+    $allowedsizes = array(16, 20, 25, 40, 50, 60, 100);
+    if (!in_array($size, $allowedsizes)) {
+        log_warn('remote_avatar_url: size should be in (' . join(', ', $allowedsizes) . ')');
+    }
+    else {
+        $size = 40;
+    }
+    $notfound = $THEME->get_url('images/no_userphoto' . $size . '.png');
+    if (!empty($email) && get_config('remoteavatars')) {
+        return remote_avatar($email, $size, $notfound);
+    }
+    return $notfound;
+}
+
+/**
  * Return a Gravatar URL if one exists for the given user.
  *
  * @param string  $email         Email address of the user
@@ -2576,7 +2611,12 @@ function remote_avatar($email, $size, $notfound) {
     if (get_config('remoteavatarbaseurl')) {
         $baseurl = get_config('remoteavatarbaseurl');
     }
-    return "{$baseurl}{$md5sum}.jpg?r=g&s=$s&d=" . urlencode($notfound);
+    // Check if it is a valid avatar
+    $result = @get_headers("{$baseurl}{$md5sum}.jpg?d=404");
+    if (!$result || preg_match("#^HTTP/\d+\.\d+ 404 #i", $result[0])) {
+        return $notfound;
+    }
+    return "{$baseurl}{$md5sum}.jpg?r=g&s=$s";
 }
 
 /**

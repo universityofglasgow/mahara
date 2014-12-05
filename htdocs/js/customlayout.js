@@ -3,12 +3,12 @@
 
     // Public Methods
     CustomLayoutManager.customlayout_add_row = function() {
-        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val());
+        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val(), 10);
         if ((numrows < get_max_custom_rows()) && (numrows >= 1)) {
             var newrow = $('#customrow_' + numrows).clone();
             var currentncols = $('#customrow_' + numrows).find('#selectnumcolsrow_' + numrows).val();
             var currentcollayout = $('#customrow_' + numrows).find('#selectcollayoutrow_' + numrows).val();
-            $(newrow).find('.customrowtitle').html('<strong>Row ' + (numrows + 1) + '</strong>');
+            $(newrow).find('.customrowtitle').html('<strong>' + get_string('rownr', numrows + 1) + '</strong>');
             $(newrow).attr('id', 'customrow_' + (numrows + 1));
             $(newrow).find('#selectnumcolsrow_' + numrows).attr('value', currentncols);
             $(newrow).find('#selectnumcolsrow_' + numrows).attr('id', 'selectnumcolsrow_' + (numrows + 1));
@@ -25,18 +25,18 @@
             customlayout_change_layout();
         }
 
-        if (parseInt($('#viewlayout_customlayoutnumrows').val()) >= get_max_custom_rows()) {
+        if (parseInt($('#viewlayout_customlayoutnumrows').val(), 10) >= get_max_custom_rows()) {
             $('#addrow').attr('disabled', 'disabled');
         }
     };
 
     CustomLayoutManager.customlayout_remove_row = function(row) {
-        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val());
+        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val(), 10);
         $(row).closest('.customrow').remove();
         $('#viewlayout_customlayoutnumrows').val(numrows - 1);
         var inc = 1;
         $('#customrows .customrow').each(function() {
-            $(this).find('.customrowtitle').html('<strong>Row ' + inc + '</strong>');
+            $(this).find('.customrowtitle').html('<strong>' + get_string('rownr', inc) + '</strong>');
             $(this).attr('id', 'customrow_' + inc);
             $(this).find('.selectnumcols').attr('id', 'selectnumcolsrow_' + inc);
             $(this).find('input').attr('class', 'removecustomrow_' + inc);
@@ -44,14 +44,14 @@
         });
         customlayout_change_layout();
 
-        if (parseInt($('#viewlayout_customlayoutnumrows').val()) < get_max_custom_rows()) {
+        if (parseInt($('#viewlayout_customlayoutnumrows').val(), 10) < get_max_custom_rows()) {
             $('#addrow').removeAttr('disabled');
         }
     };
 
     CustomLayoutManager.customlayout_change_numcolumns = function(columnoptions) {
         var currentrow = $(columnoptions).attr('id').substr($(columnoptions).attr('id').lastIndexOf('_') + 1);
-        var numcols = parseInt(columnoptions.options[columnoptions.selectedIndex].value);
+        var numcols = parseInt(columnoptions.options[columnoptions.selectedIndex].value, 10);
         // reverse in order to select the first option
         $.each($('#selectcollayoutrow_' + currentrow + ' > option').get().reverse(), function() {
             if (this.text.split('-').length != numcols) {
@@ -71,7 +71,7 @@
     };
 
     CustomLayoutManager.customlayout_submit_layout = function() {
-        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val());
+        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val(), 10);
         var collayouts = '';
         for (i=0; i<numrows; i++) {
             collayouts += '_row' + [i+1] + '_' + $('#selectcollayoutrow_' + (i+1)).val();
@@ -109,7 +109,7 @@
                 else {
                     // make a row for it
                     var rowtitlediv = $('<h3>').attr('class', 'title');
-                    rowtitlediv.html('<strong>' + numrows + ' rows</strong>');
+                    rowtitlediv.html('<strong>' + get_string('nrrows', numrows) + '</strong>');
                     var rowcontainer = $('<div>').attr({
                         'id': 'viewlayout_advancedlayoutselect_row' + numrows,
                         'class': 'fr'
@@ -203,7 +203,7 @@
     }
 
     function customlayout_change_layout() {
-        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val());
+        var numrows = parseInt($('#viewlayout_customlayoutnumrows').val(), 10);
         var collayouts = '';
         for (i=0; i<numrows; i++) {
             collayouts += '_row' + [i+1] + '_' + $('#selectcollayoutrow_' + (i+1)).val();
@@ -221,7 +221,7 @@
                     'title': data.data.alttext
                     });
             if (data.data.newimage) {
-                $('#custompreview').html('<p>Generating preview...</p>');
+                $('#custompreview').html('<p>' + get_string('generatingpreview', 'view') + '</p>');
                 // delay to allow image to be written to disk
                 setTimeout(function() {
                     $('#custompreview').html(pi);

@@ -545,9 +545,30 @@ class ArtefactTypePersonalinformation extends ArtefactTypeResume {
     }
 }
 
+/**
+ * Helper interface to hold ArtefactTypeResumeComposite's abstract static methods
+ */
+interface IArtefactTypeResumeComposite {
+    /**
+    * This function should return a snippet of javascript
+    * to be plugged into a table renderer instantiation
+    * it comprises the cell function definition
+    */
+    public static function get_tablerenderer_js();
 
+    public static function get_tablerenderer_title_js_string();
 
-abstract class ArtefactTypeResumeComposite extends ArtefactTypeResume {
+    public static function get_tablerenderer_body_js_string();
+
+    /**
+    * This function should return an array suitable to
+    * put into the 'elements' part of a pieform array
+    * to generate a form to add an instance
+    */
+    public static function get_addform_elements();
+}
+
+abstract class ArtefactTypeResumeComposite extends ArtefactTypeResume implements IArtefactTypeResumeComposite {
 
     public static function is_singular() {
         return true;
@@ -567,20 +588,9 @@ abstract class ArtefactTypeResumeComposite extends ArtefactTypeResume {
         );
     }
 
-    /**
-    * This function should return a snippet of javascript
-    * to be plugged into a table renderer instantiation
-    * it comprises the cell function definition
-    */
-    public static abstract function get_tablerenderer_js();
-
-    public static abstract function get_tablerenderer_title_js_string();
-
     public static function get_tablerenderer_extra_js_string() {
         return '';
     }
-
-    public static abstract function get_tablerenderer_body_js_string();
 
     public static function get_tablerenderer_attachments_js_string(){
         return '';
@@ -593,13 +603,6 @@ abstract class ArtefactTypeResumeComposite extends ArtefactTypeResume {
     public static function format_render_self_data($data) {
         return $data;
     }
-
-    /**
-    * This function should return an array suitable to
-    * put into the 'elements' part of a pieform array
-    * to generate a form to add an instance
-    */
-    public static abstract function get_addform_elements();
 
     /**
     * This function processes the form for the composite
@@ -1130,7 +1133,7 @@ EOF;
         $downloadstr = json_encode(get_string('Download', 'artefact.file'));
         return <<<EOF
 function formatSize(size) {
-    size = parseInt(size);
+    size = parseInt(size, 10);
     if (size < 1024) {
         return size <= 0 ? '0' : size.toFixed(1).replace(/\.0$/, '') + 'b';
     }

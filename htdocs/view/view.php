@@ -189,7 +189,7 @@ $viewtheme = $view->get('theme');
 if ($viewtheme && $THEME->basename != $viewtheme) {
     $THEME = new Theme($viewtheme);
 }
-$headers = array('<link rel="stylesheet" type="text/css" href="' . get_config('wwwroot') . 'theme/views.css?v=' . get_config('release'). '">');
+$headers = array('<link rel="stylesheet" type="text/css" href="' . append_version_number(get_config('wwwroot') . 'theme/views.css') . '">');
 $headers = array_merge($headers, $view->get_all_blocktype_css());
 // Set up skin, if the page has one
 $viewskin = $view->get('skin');
@@ -210,8 +210,8 @@ if (!$view->is_public()) {
 if (get_config_plugin('blocktype', 'gallery', 'useslimbox2')) {
     $langdir = (get_string('thisdirection', 'langconfig') == 'rtl' ? '-rtl' : '');
     $headers = array_merge($headers, array(
-        '<script type="text/javascript" src="' . get_config('wwwroot') . 'lib/slimbox2/js/slimbox2.js?v=' . get_config('release'). '"></script>',
-        '<link rel="stylesheet" type="text/css" href="' . get_config('wwwroot') . 'lib/slimbox2/css/slimbox2' . $langdir . '.css?v=' . get_config('release'). '">'
+        '<script type="text/javascript" src="' . append_version_number(get_config('wwwroot') . 'lib/slimbox2/js/slimbox2.js') . '"></script>',
+        '<link rel="stylesheet" type="text/css" href="' . append_version_number(get_config('wwwroot') . 'lib/slimbox2/css/slimbox2' . $langdir . '.css') . '">'
     ));
 }
 
@@ -225,6 +225,8 @@ if ($owner && $owner == $USER->get('id')) {
         }
     }
 }
+
+$viewcontent = $view->build_rows(); // Build content before initialising smarty in case pieform elements define headers.
 
 $smarty = smarty(
     $javascript,
@@ -342,7 +344,7 @@ if ($mnetviewlist = $SESSION->get('mnetviewaccess')) {
 }
 
 $smarty->assign('viewdescription', $view->get('description'));
-$smarty->assign('viewcontent', $view->build_rows());
+$smarty->assign('viewcontent', $viewcontent);
 $smarty->assign('releaseform', $releaseform);
 if (isset($addfeedbackform)) {
     $smarty->assign('enablecomments', 1);

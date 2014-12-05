@@ -51,19 +51,17 @@ class PluginBlocktypeGallery extends PluginBlocktype {
         $configdata['viewid'] = $instance->get('view');
         $style = isset($configdata['style']) ? intval($configdata['style']) : 2;
         $copyright = null; // Needed to set Panoramio copyright later...
-
+        $width = !empty($configdata['width']) ? $configdata['width'] : 75;
         switch ($style) {
             case 0: // thumbnails
                 $template = 'thumbnails';
-                $width = isset($configdata['width']) ? $configdata['width'] : 75;
                 break;
             case 1: // slideshow
                 $template = 'slideshow';
-                $width = isset($configdata['width']) ? $configdata['width'] : 400;
+                $width = !empty($configdata['width']) ? $configdata['width'] : 400;
                 break;
             case 2: // square thumbnails
                 $template = 'squarethumbs';
-                $width = isset($configdata['width']) ? $configdata['width'] : 75;
                 break;
         }
 
@@ -162,7 +160,7 @@ class PluginBlocktypeGallery extends PluginBlocktype {
                         $width = 75; // Currently only thumbnail size, that Flickr supports
 
                         $api_key = get_config_plugin('blocktype', 'gallery', 'flickrapikey');
-                        $URL = 'http://api.flickr.com/services/rest/?method=flickr.photosets.getPhotos&extras=url_sq,url_t&photoset_id=' . $var2 . '&api_key=' . $api_key;
+                        $URL = 'https://api.flickr.com/services/rest/?method=flickr.photosets.getPhotos&extras=url_sq,url_t&photoset_id=' . $var2 . '&api_key=' . $api_key;
                         $xmlDoc = new DOMDocument('1.0', 'UTF-8');
                         $config = array(
                             CURLOPT_URL => $URL,
@@ -370,14 +368,19 @@ class PluginBlocktypeGallery extends PluginBlocktype {
                 // If the Thumbnails are Square or not...
                 if ($style == 2) {
                     $src .= '&size=' . $width . 'x' . $width;
+                    $height = $width;
                 }
                 else {
                     $src .= '&maxwidth=' . $width;
+                    $imgwidth = $image->get('width');
+                    $imgheight = $image->get('height');
+                    $height = ($imgwidth > $width) ? intval(($width / $imgwidth) * $imgheight) : $imgheight;
                 }
 
                 $images[] = array(
                     'link' => $link,
                     'source' => $src,
+                    'height' => $height,
                     'title' => $image->get('description'),
                     'slimbox2' => $slimbox2attr
                 );
@@ -615,6 +618,15 @@ class PluginBlocktypeGallery extends PluginBlocktype {
         }
         unset($values['folder']);
         unset($values['images']);
+        switch ($values['style']) {
+            case 0: // thumbnails
+            case 2: // square thumbnails
+                $values['width'] = !empty($values['width']) ? $values['width'] : 75;
+                break;
+            case 1: // slideshow
+                $values['width'] = !empty($values['width']) ? $values['width'] : 400;
+                break;
+        }
         return $values;
     }
 
@@ -694,7 +706,7 @@ class PluginBlocktypeGallery extends PluginBlocktype {
             // Flickr Set (RSS) - for Roy Tanck's widget
             array(
                 'match' => '#.*api.flickr.com.*set=(\d+).*nsid=([a-zA-Z0-9\@]+).*#',
-                'url'   => 'http://api.flickr.com/services/feeds/photoset.gne?set=$1&nsid=$2',
+                'url'   => 'https://api.flickr.com/services/feeds/photoset.gne?set=$1&nsid=$2',
                 'type'  => 'widget',
                 'var1' => '$2',
                 'var2' => '$1',
@@ -702,7 +714,7 @@ class PluginBlocktypeGallery extends PluginBlocktype {
             // Flickr Set (direct link)
             array(
                 'match' => '#.*www.flickr.com/photos/([a-zA-Z0-9\_\-\.\@]+).*/sets/([0-9]+).*#',
-                'url'   => 'http://www.flickr.com/photos/$1/sets/$2/',
+                'url'   => 'https://www.flickr.com/photos/$1/sets/$2/',
                 'type'  => 'flickr',
                 'var1' => '$1',
                 'var2' => '$2',

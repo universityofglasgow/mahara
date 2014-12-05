@@ -17,7 +17,8 @@ To install, please follow the instructions here:
 
 UPGRADING:
 
-If you already have a Mahara you wish to upgrade, follow the instructions here:
+Mahara 1.9 supports direct upgrades from previous Mahara versions 1.1.0 and later.
+To upgrade an existing Mahara installation, follow the instructions here:
 
   https://wiki.mahara.org/System_Administrator%27s_Guide/Upgrading_Mahara
 
@@ -38,21 +39,22 @@ Mahara 1.9 requires:
    extensions.
 
  * PHP 5.3 or later, with the following extensions:
+ ** curl
  ** gd (including Freetype support)
  ** json
- ** curl
+ ** ldap
  ** libxml
- ** SimpleXML
- ** session
- ** pgsql; or mysqli; or mysql
- ** openssl and xmlrpc (for networking support)
  ** mbstring
- ** mime_magic; or fileinfo
  ** mcrypt
- ** imagick (optional)
- ** zlib (optional)
- ** zip (optional)
+ ** mime_magic; or fileinfo
+ ** pgsql; or mysqli; or mysql
+ ** session
+ ** SimpleXML
  ** bz2 (optional)
+ ** imagick (optional)
+ ** openssl and xmlrpc (optional; for networking support)
+ ** zip (optional)
+ ** zlib (optional)
  ** ... and ensure that the magic_quotes and register_globals settings are off.
 
  * OS: Mahara is only officially supported on Debian (5.0/"Lenny" or later) and

@@ -228,8 +228,8 @@ var cc =
         jqueryOk = true;
         for(i = 0; i < parts.length && i < versionRequired.length; i++)
         {
-            currentpart = parseInt(parts[i]);
-            requiredpart = parseInt(versionRequired[i]);
+            currentpart = parseInt(parts[i], 10);
+            requiredpart = parseInt(versionRequired[i], 10);
             if(currentpart < requiredpart)
             {
                 /* Unsatisfied - this part of the version string is less than the version we require */
@@ -927,7 +927,11 @@ var cc =
     {
         var exdate = new Date();
         exdate.setDate(exdate.getDate() + expirydays);
-        document.cookie = name+'='+value+'; expires='+exdate.toUTCString()+'; path=/'
+        var newcookie = name+'='+value+'; expires='+exdate.toUTCString()+'; path=/';
+        if (location.protocol == 'https:') {
+            newcookie = newcookie + '; secure';
+        }
+        document.cookie = newcookie;
     },
 
     onremoteconsentgiven: function ()

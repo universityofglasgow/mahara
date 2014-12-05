@@ -67,10 +67,11 @@ function check_upgrades($name=null) {
                     throw new ConfigSanityException("Mahara requires InnoDB tables.  Please ensure InnoDB tables are enabled in your MySQL server.");
                 }
             }
-            $core = new StdClass;
+            $core = new stdClass();
             $core->install = true;
             $core->to = $config->version;
             $core->torelease = $config->release;
+            $core->toseries = $config->series;
             $toupgrade['core'] = $core;
             $installing = true;
         }
@@ -82,12 +83,13 @@ function check_upgrades($name=null) {
                                           . "($config->minupgraderelease) first "
                                           . " (you have $coreversion ($corerelease)");
             }
-            $core = new StdClass;
+            $core = new stdClass();
             $core->upgrade = true;
             $core->from = $coreversion;
             $core->fromrelease = $corerelease;
             $core->to = $config->version;
             $core->torelease = $config->release;
+            $core->toseries = $config->series;
             $toupgrade['core'] = $core;
         }
     }
@@ -297,6 +299,8 @@ function upgrade_core($upgrade) {
 
     set_config('version', $upgrade->to);
     set_config('release', $upgrade->torelease);
+    set_config('series', $upgrade->toseries);
+    bump_cache_version();
 
     if (!empty($upgrade->install)) {
         core_postinst();
@@ -321,6 +325,7 @@ function upgrade_local($upgrade) {
 
     set_config('localversion', $upgrade->to);
     set_config('localrelease', $upgrade->torelease);
+    bump_cache_version();
 
     db_commit();
     return true;
@@ -397,6 +402,7 @@ function upgrade_plugin($upgrade) {
     else {
         update_record($installtable, $installed, 'name');
     }
+    bump_cache_version();
 
     // postinst stuff...
     safe_require($plugintype, $pluginname);
@@ -783,6 +789,8 @@ function core_install_firstcoredata_defaults() {
     set_config('onlineuserssideblockmaxusers', 10);
     set_config('loggedinprofileviewaccess', 1);
     set_config('dropdownmenu', 0);
+    // Set this to a random starting number to make minor version slightly harder to detect
+    set_config('cacheversion', rand(1000, 9999));
 
     // install the applications
     $app = new StdClass;
@@ -874,6 +882,7 @@ function core_install_firstcoredata_defaults() {
         'rebuild_artefact_parent_cache_dirty'       => array('*', '*', '*', '*', '*'),
         'rebuild_artefact_parent_cache_complete'    => array('0', '4', '*', '*', '*'),
         'auth_clean_partial_registrations'          => array('5', '0', '*', '*', '*'),
+        'auth_clean_expired_password_requests'      => array('5', '0', '*', '*', '*'),
         'auth_handle_account_expiries'              => array('5', '10', '*', '*', '*'),
         'auth_handle_institution_expiries'          => array('5', '9', '*', '*', '*'),
         'activity_process_queue'                    => array('*/5', '*', '*', '*', '*'),
@@ -1501,4 +1510,14 @@ function install_watchlist_notification() {
         $cron->month        = '*';
         $cron->dayofweek    = '*';
         ensure_record_exists('cron', $cron, $cron);
+}
+
+
+/**
+ * Increment the cache version number.
+ * This is an arbitrary number that we append to the end of static content to make sure the user
+ * refreshes it when we update the site.
+ */
+function bump_cache_version() {
+    set_config('cacheversion', get_config('cacheversion') + 1);
 }

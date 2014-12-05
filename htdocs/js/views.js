@@ -103,14 +103,9 @@
                 $(this).remove();
             });
 
-            // Remove radio buttons for moving block types into place
+            // Hide radio buttons for moving block types into place
             $('#content-editor input.blocktype-radio').each(function() {
-                if (ViewManager.isIE6 || ViewManager.isIE7 || ViewManager.isIE8) {
-                    $(this).hide();
-                }
-                else {
-                    $(this).get(0).type = 'hidden';
-                }
+                $(this).hide();
             });
 
             // Remove the a href links that are needed for when js is turned off
@@ -222,7 +217,7 @@
         // Set equal column heights
         setTimeout(function() {
             //safari needs delay to load images
-            setEqualColumnHeights('.row', 40);
+            setEqualColumnHeights('#column-container > .row', 40);
         }, 150);
 
         showColumnBackgroundsOnSort();
@@ -243,7 +238,7 @@
         // to make sure the 'floating' panel when opened is not longer than
         // the 'containing' div
         var editwrapper = $('#editcontent-sidebar-wrapper');
-        var editwrapperheight = (parseInt(editwrapper.css('height')) + parseInt(editwrapper.css('padding-top')) + parseInt(editwrapper.css('padding-bottom')));
+        var editwrapperheight = (parseInt(editwrapper.css('height'), 10) + parseInt(editwrapper.css('padding-top'), 10) + parseInt(editwrapper.css('padding-bottom'), 10));
         if ($('#main-column').height() < editwrapperheight) {
             var windowWidth = windowWide();
             if (windowWidth) {
@@ -405,14 +400,6 @@
 
     function makeNewBlocksDraggable() {
         $('.blocktype-list div.blocktype').each(function() {
-            $(this).find('.blocktypelink').off('click keydown'); // remove old event handlers
-            $(this).find('.blocktypelink').on('click keydown', function(e) {
-                var keyCode = $.ui.keyCode;
-                // Add a block when click left button or press 'Space bar' or 'Enter' key
-                if (((e.type == 'click' && e.button == 0) || e.keyCode == keyCode.SPACE || e.keyCode == keyCode.ENTER) && ($('#addblock').is(':hidden'))) {
-                    startAddBlock($(this));
-                }
-            });
             $(this).draggable({
                 start: function(event, ui) {
                     showColumnBackgrounds();
@@ -433,9 +420,34 @@
                 },
                 appendTo: 'body'
             });
+
+            $(this).find('.blocktypelink').off('mouseup keydown'); // remove old event handlers
+            $(this).find('.blocktypelink').on('mouseup keydown', function(e) {
+                // Add a block when click left button or press 'Space bar' or 'Enter' key
+                if (isHit(e) && $('#addblock').is(':hidden')) {
+                    startAddBlock($(this));
+                }
+            });
         });
     }
 
+    /**
+     * Make sure the previous/next key tabbing will move within the dialog
+     */
+    function keytabbinginadialog(dialog, firstelement, lastelement) {
+        firstelement.keydown(function(e) {
+            if (e.keyCode === $j.ui.keyCode.TAB && e.shiftKey) {
+                lastelement.focus();
+                e.preventDefault();
+            }
+        });
+        lastelement.keydown(function(e) {
+            if (e.keyCode === $j.ui.keyCode.TAB && !e.shiftKey) {
+                firstelement.focus();
+                e.preventDefault();
+            }
+        });
+    }
     function startAddBlock(element) {
         var addblockdialog = $('#addblock').removeClass('hidden');
         addblockdialog.one('dialog.end', function(event, options) {
@@ -450,20 +462,11 @@
         computeColumnInputs(addblockdialog);
         setDialogPosition(addblockdialog);
 
-        if (document.addEventListener) {
-            addblockdialog.data('focuslocker', function(e) {
-                if (!addblockdialog[0].contains(e.target)) {
-                    e.stopPropagation();
-                    addblockdialog.find('.deletebutton').focus();
-                }
-            });
-            document.addEventListener('focus', addblockdialog.data('focuslocker'), true);
-        }
-
         $('body').append($('<div>').attr('id', 'overlay'));
 
-        var deletebutton = addblockdialog.find('.deletebutton');
-        deletebutton.focus();
+        addblockdialog.find('.deletebutton').focus();
+
+        keytabbinginadialog(addblockdialog, addblockdialog.find('.deletebutton'), addblockdialog.find('.cancel'));
     }
 
     function makeExistingBlocksSortable() {
@@ -495,7 +498,7 @@
                     $('.row .column-content').each(function() {
                         $(this).css('min-height', '');
                     });
-                    setEqualColumnHeights('.row', 40);
+                    setEqualColumnHeights('#column-container > .row', 40);
                 }
             },
 
@@ -519,7 +522,7 @@
         $(this).closest('.cellchooser').find('.active').removeClass('active');
         $(this).parent().addClass('active');
         var position = $(this).val().split('-');
-        var element = $('.row').eq(parseInt(position[0]) - 1).find('.column').eq(parseInt(position[1]) - 1);
+        var element = $('#column-container > .row').eq(parseInt(position[0], 10) - 1).find('.column').eq(parseInt(position[1], 10) - 1);
         var options = [get_string('blockordertop')];
         element.find('.column-content .blockinstance .blockinstance-header').each(function() {
             options.push(get_string('blockorderafter', $(this).find('h2.title').text()));
@@ -709,7 +712,7 @@
                     $('.column-content').each(function() {
                         $(this).css('min-height', '');
                     });
-                    setEqualColumnHeights($('.row'), 50);
+                    setEqualColumnHeights($('#column-container > .row'), 50);
                     if (ViewManager.isIE6) {
                         // refresh the 'add block here' buttons
                         ViewManager.displayPage(config['wwwroot'] + 'view/blocks.php?id=' + $('#viewid').val());
@@ -751,8 +754,8 @@
             computeColumnInputs(addblockdialog);
             var prevcell = button.closest('.column-content');
             var order = prevcell.children().index(button.closest('.blockinstance'));
-            var row = $('.row').index(button.closest('.row'));
-            var column = button.closest('.row').children().index(button.closest('.column'));
+            var row = $('#column-container > .row').index(button.closest('#column-container > .row'));
+            var column = button.closest('#column-container > .row').children().index(button.closest('.column'));
             var radio = addblockdialog.find('.cellchooser').children().eq(row).find('input').eq(column);
             var changefunction = function() {
                 if (radio.prop('checked')) {
@@ -787,27 +790,17 @@
 
             setDialogPosition(addblockdialog);
 
-            if (document.addEventListener) {
-                addblockdialog.data('focuslocker', function(e) {
-                    if (!addblockdialog[0].contains(e.target)) {
-                        e.stopPropagation();
-                        addblockdialog.find('.deletebutton').focus();
-                    }
-                });
-                document.addEventListener('focus', addblockdialog.data('focuslocker'), true);
-            }
-
             $('body').append($('<div>').attr('id', 'overlay'));
 
-            var deletebutton = addblockdialog.find('.deletebutton');
-            deletebutton.focus();
+            addblockdialog.find('.deletebutton').focus();
+            keytabbinginadialog(addblockdialog, addblockdialog.find('.deletebutton'), addblockdialog.find('.cancel'));
         });
     }
 
     function computeColumnInputs(dialog) {
         var inputcontainer = dialog.find('#addblock_cellchooser_container td');
         var result = $('<div>').addClass('cellchooser');
-        $('.row').each(function(i) {
+        $('#column-container > .row').each(function(i) {
             var row = $('<div>');
             $(this).find('.column').each(function(j) {
                 var value = (i + 1) + '-' + (j + 1);
@@ -901,13 +894,9 @@
             forEach(getElementsByTagAndClassName('input', 'blocktype-radio', 'top-pane'), function(i) {
                     setNodeAttribute(i, 'style', 'display:inline');
                 });
-            // Remove radio buttons for moving block types into place
+            // Hide radio buttons for moving block types into place
             $('#top-pane input.blocktype-radio').each(function() {
-                //$(this).attr('type', 'hidden'); // not allowed in jquery
-                $(this).get(0).type = 'hidden'; // TODO need to test this across browsers
-                if (ViewManager.isIE7 || ViewManager.isIE6) {
-                    $(this).hide();
-                }
+                $(this).hide();
             });
         }
         else {
@@ -984,7 +973,7 @@
      */
     function checkColumnButtonDisabledState() {
         // For each row
-        $('.row').each(function() {
+        $('#column-container > .row').each(function() {
 
             // Get the existing number of columns
             var match = $('div.column:first', $(this)).attr('class').match(/columns([0-9]+)/)[1];
@@ -1012,6 +1001,12 @@
         });
     }
 
+    /**
+     * return true if the mousedown is <LEFT BUTTON> or the keydown is <Space> or <Enter>
+     */
+    function isHit(e) {
+        return (e.which === 1 || e.button === 1 || e.keyCode === $j.ui.keyCode.SPACE || e.keyCode === $j.ui.keyCode.ENTER);
+    }
     /*
      * Initialises the dialog used to add and move blocks
      */
@@ -1019,8 +1014,14 @@
         $('body').append($('#addblock'));
         $('#addblock').css('width', 500);
 
-        $('#addblock .submit').on('click keydown', function(e) {
-            if (e.type == 'click' || e.keyCode == 13 || e.keyCode == 32) {
+        $('#addblock .cancel, #addblock .deletebutton').on('mousedown keydown', function(e) {
+            if (isHit(e)) {
+                closePositionBlockDialog(e, {'saved': false});
+            }
+        });
+
+        $('#addblock .submit').on('mousedown keydown', function(e) {
+            if (isHit(e)) {
                 var position = $('#addblock .cellchooser input:checked').val().split('-');
                 var order = $('#addblock_position').prop('selectedIndex') + 1;
                 closePositionBlockDialog(e, {
@@ -1029,15 +1030,15 @@
                 });
             }
         });
-
-        $('#addblock .cancel, #addblock .deletebutton').on('click keydown', function(e) {
-            // Stops various errors with click event being run on focus
-            if ((e.type == 'click' && e.buttons < 1) || e.keyCode == 32) {
-                e.stopPropagation();
-                e.preventDefault();
-            }
-            else if (e.type == 'click' || e.keyCode == 13) {
-                closePositionBlockDialog(e, {'saved': false});
+        // To allow for pushing enter button when on selecting the 'cell' column line
+        $('#addblock').on('keydown', function(e) {
+            if (e.keyCode == 13) {
+                var position = $('#addblock .cellchooser input:checked').val().split('-');
+                var order = $('#addblock_position').prop('selectedIndex') + 1;
+                closePositionBlockDialog(e, {
+                    'saved': true,
+                    'row': position[0], 'column': position[1], 'order': order
+                });
             }
         });
     }
@@ -1049,10 +1050,6 @@
         e.stopPropagation();
         e.preventDefault();
         var addblockdialog = $('#addblock');
-        if (addblockdialog.data('focuslocker')) {
-            document.removeEventListener('focus', addblockdialog.data('focuslocker'));
-            addblockdialog.removeData('focuslocker');
-        }
         options.trigger = e.type;
         addblockdialog.addClass('hidden').trigger('dialog.end', options);
         $('#overlay').remove();
@@ -1121,7 +1118,7 @@
         rewriteAddColumnButtons('#row_' + rowid + '_column_' + colid);
         rewriteRemoveColumnButtons('#row_' + rowid + '_column_' + colid);
         makeExistingBlocksSortable(); //('#row_' + rowid);
-        setEqualColumnHeights('.row', 40);
+        setEqualColumnHeights('#column-container > .row', 40);
     }
 
     /**
@@ -1202,7 +1199,7 @@
             }
             $(this).find('.column-content').css({'min-height': currentTallest});
         });
-        setEqualColumnHeights('.row', 40);
+        setEqualColumnHeights('#column-container > .row', 40);
     }
 
     function getConfigureForm(blockinstance) {
@@ -1343,19 +1340,10 @@
             eval(configblock.javascript);
         })(getElement);
 
-        deletebutton.focus();
-
         // Lock focus to the newly opened dialog
+        newblock.find('.deletebutton').focus();
+        keytabbinginadialog(newblock, newblock.find('.deletebutton'), newblock.find('.cancel'));
         $('#container').attr('aria-hidden', 'true');
-        if (document.addEventListener) {
-            newblock.data('focuslocker', function(e) {
-                if (!newblock[0].contains(e.target) && newblock[0].ownerDocument == e.target.ownerDocument) {
-                    e.stopPropagation();
-                    newblock.find('.deletebutton').focus();
-                }
-            });
-            document.addEventListener('focus', newblock.data('focuslocker'), true);
-        }
     } // end of addConfigureBlock()
 
     function removeConfigureBlocks() {
@@ -1363,10 +1351,6 @@
         setTimeout(function() {
             $('div.configure').each( function() {
                 $(this).addClass('hidden');
-                if ($(this).data('focuslocker')) {
-                    document.removeEventListener('focus', $(this).data('focuslocker'));
-                    $(this).removeData('focuslocker');
-                }
             });
         }, 1);
     }

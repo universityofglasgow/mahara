@@ -38,7 +38,7 @@ class PluginBlocktypeGoogleApps extends SystemBlocktype {
         $type   = hsc($apps['type']);
         $height = (!empty($configdata['height'])) ? intval($configdata['height']) : self::$default_height;
 
-        if (isset($configdata['appsid'])) {
+        if (isset($configdata['appsid']) && !empty($type)) {
             $smarty = smarty_core();
             $smarty->assign('url', $apps['url']);
             switch ($type) {
@@ -57,7 +57,7 @@ class PluginBlocktypeGoogleApps extends SystemBlocktype {
             }
         }
 
-        return '';
+        return get_string('badurlerror', 'blocktype.googleapps', $url);
     }
 
     public static function has_instance_config() {
@@ -96,6 +96,10 @@ class PluginBlocktypeGoogleApps extends SystemBlocktype {
     private static function make_apps_url($url) {
         $httpstr = is_https() ? 'https' : 'http';
 
+        if (preg_match('#//goo\.gl/#', $url)) {
+            $results = mahara_shorturl_request($url);
+            $url = $results->fullurl;
+        }
         $embedsources = array(
             // docs.google.com/leaf and (as of early 2012) docs.google.com/open - Google collections
             // $1 - domain, e.g. /a/domainname/
@@ -258,16 +262,50 @@ class PluginBlocktypeGoogleApps extends SystemBlocktype {
                 'url'   => $httpstr . '://www.google.com/calendar/embed?src=$1',
                 'type'  => 'iframe',
             ),
-            // maps.google.com - Google My Maps (IMPORTANT: this is ONLY for My Maps)
+            // (maps|www).google.com - Google My Maps (IMPORTANT: this is ONLY for My Maps)
             array(
-                'match' => '#.*maps.google.[^/]*/maps/ms\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+/]+).*#',
-                'url'   => $httpstr . '://maps.google.com/maps/ms?$1',
+                'match' => '#.*google.[^/]*/maps/ms\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+/]+).*#',
+                'url'   => $httpstr . '://maps.google.com/maps/ms?$1&output=embed',
                 'type'  => 'iframe',
             ),
-            // maps.google.com - Google Maps (IMPORTANT: this is for ANY Maps EXCEPT My Maps)
+            // maps.google.com - Other maps.google.map URLs.
             array(
                 'match' => '#.*maps.google.[^/]*/(maps)?\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+/]+).*#',
-                'url'   => $httpstr . '://maps.google.com/maps?$2',
+                'url'   => $httpstr . '://maps.google.com/maps?$2&output=embed',
+                'type'  => 'iframe',
+            ),
+            // (maps|www).google.com/maps/place - Google Map for a place URLs.
+            array(
+                'match' => '#.*google.[^/]*/maps/place/([^/]+)/@([0-9\-\.]+),([0-9\-\.]+),([0-9]+)z/data=.+!1s([0-9xa-f]+):([0-9xa-f]+).*#',
+                'url'   =>  function ($m) {
+                                $zoomlevel = min(max($m[4], 3), 21);
+                                $height = 188 * pow(2, (21 - $zoomlevel));
+                                return "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d${height}!2d${m[3]}!3d${m[2]}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s${m[5]}%3A${m[6]}!2s${m[1]}!5e0";
+                            },
+                'type'  => 'iframe',
+            ),
+            // mapsengine.google.com/map/embed URLs.
+            array(
+                'match' => '#.*mapsengine.google.com[^/]*/map/[^?]*\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+\?/]+).*#',
+                'url'   => $httpstr . '://mapsengine.google.com/map/embed?$1',
+                'type'  => 'iframe',
+            ),
+            // www.google.com/maps? URLs.
+            array(
+                'match' => '#.*www.google.com[^/]*/maps\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+\!/]+).*#',
+                'url'   => $httpstr . '://www.google.com/maps?$1&output=embed',
+                'type'  => 'iframe',
+            ),
+            // www.google.com/maps/embed URLs - these must be https.
+            array(
+                'match' => '#.*www.google.com[^/]*/maps/embed\?([a-zA-Z0-9\.\,\;\_\-\&\%\=\+\!/]+).*#',
+                'url'   => 'https://www.google.com/maps/embed?$1',
+                'type'  => 'iframe',
+            ),
+            // www.google.com/maps/@ URLs.
+            array(
+                'match' => '#.*www.google.com.*?/\@([a-zA-Z0-9\.\-]+)\,([a-zA-Z0-9\.\-]+)\,([0-9]+).*#',
+                'url'   => 'https://maps.google.com/maps?ll=$1,$2&z=$3&output=embed',
                 'type'  => 'iframe',
             ),
             // books.google.com - Google Books
@@ -288,14 +326,20 @@ class PluginBlocktypeGoogleApps extends SystemBlocktype {
         foreach ($embedsources as $source) {
             $url = htmlspecialchars_decode($url); // convert &amp; back to &, etc.
             if (preg_match($source['match'], $url)) {
-                $apps_url = preg_replace($source['match'], $source['url'], $url);
+                if (is_string($source['url'])) {
+                    $apps_url = preg_replace($source['match'], $source['url'], $url);
+                }
+                else if (is_callable($source['url'])) {
+                    $apps_url = preg_replace_callback($source['match'], $source['url'], $url);
+                }
                 // For correctly embed Google maps...
                 $apps_url = str_replace('source=embed', 'output=embed', $apps_url);
                 $apps_type = $source['type'];
                 return array('url' => $apps_url, 'type' => $apps_type);
             }
         }
-        // TODO handle failure case
+        // if we reach here then mahara does not understand the url
+        return array('url' => $url, 'type' => false);
     }
 
 
