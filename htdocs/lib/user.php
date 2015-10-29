@@ -547,6 +547,65 @@ function set_profile_field($userid, $field, $value, $new = FALSE) {
 }
 
 /**
+ * Update the primary email to an user
+ * Add new if not exists
+ *
+ * @param int $userid The user ID
+ * @param string $newemail The new valid email address
+ */
+function set_user_primary_email($userid, $newemail) {
+    safe_require('artefact', 'internal');
+
+    $user = new User();
+    $user->find_by_id($userid);
+
+    db_begin();
+    // Update user's primary email address
+    if ($newemail !== $user->email) {
+        // Set the current email address to be secondary
+        update_record(
+            'artefact_internal_profile_email',
+            (object)array(
+                'principal' => 0,
+            ),
+            (object)array(
+                'owner' => $user->id,
+                'email' => $user->email,
+            )
+        );
+        // If the new primary email address is to be verified, remove it
+        delete_records(
+            'artefact_internal_profile_email',
+            'owner', $user->id,
+            'email', $newemail,
+            'verified', '0'
+        );
+        // If the new address is one of the user's email addresses, set it as principal
+        if (record_exists(
+            'artefact_internal_profile_email',
+            'owner', $user->id,
+            'email', $newemail)) {
+            update_record(
+                'artefact_internal_profile_email',
+                (object)array(
+                    'principal' => 1,
+                ),
+                (object)array(
+                    'owner' => $user->id,
+                    'email' => $newemail,
+                )
+            );
+        }
+        else {
+            // Add new user profile email address
+            set_profile_field($user->id, 'email', $newemail, TRUE);
+        }
+        $user->email = $newemail;
+        $user->commit();
+    }
+    db_commit();
+}
+/**
  * Return the value of a profile field for a given user
  *
  * @param integer user id to find the profile field for
@@ -1687,9 +1746,9 @@ function load_user_institutions($userid) {
  * Return a username which isn't taken and which is similar to a desired username
  *
  * @param string $desired
+ * @param string $maxlen    Maximum length of desired username
  */
-function get_new_username($desired) {
-    $maxlen = 30;
+function get_new_username($desired, $maxlen=30) {
     if (function_exists('mb_strtolower')) {
         $desired = mb_strtolower(mb_substr($desired, 0, $maxlen, 'UTF-8'), 'UTF-8');
     }
@@ -2396,6 +2455,11 @@ function update_user($user, $profile, $remotename=null, $accountprefs=array(), $
             $newrecord->$k = $v;
             $updated[$k] = $v;
         }
+        if (!empty($v)
+            && ($k === 'email')
+            && ($oldrecord->$k != $v)) {
+            set_user_primary_email($userid, $v);
+        }
     }
 
     if (count(get_object_vars($newrecord))) {
@@ -2720,9 +2784,9 @@ function remote_avatar_url($email, $size) {
  *
  * @param string  $email         Email address of the user
  * @param object  $size          Maximum size of the image
- * @param boolean $notfound
+ * @param boolean $notfound      The value to return if the avatar is not found
  *
- * @returns string The URL of the image or FALSE if none was found
+ * @returns string The URL of the image or $notfound if none was found
  */
 function remote_avatar($email, $size, $notfound) {
     if (!get_config('remoteavatars')) {
@@ -2746,8 +2810,15 @@ function remote_avatar($email, $size, $notfound) {
         $baseurl = get_config('remoteavatarbaseurl');
     }
     // Check if it is a valid avatar
-    $result = @get_headers("{$baseurl}{$md5sum}.jpg?d=404");
-    if (!$result || preg_match("#^HTTP/\d+\.\d+ 404 #i", $result[0])) {
+    $result = mahara_http_request(
+            array(
+                    CURLOPT_URL => "{$baseurl}{$md5sum}.jpg?d=404",
+                    CURLOPT_HEADER => true,
+                    CURLOPT_NOBODY => true,
+            ),
+            true
+    );
+    if (!$result || $result->error || $result->info['http_code'] == 404) {
         return $notfound;
     }
     return "{$baseurl}{$md5sum}.jpg?r=g&s=$s";

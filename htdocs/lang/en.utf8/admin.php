@@ -225,9 +225,11 @@ $string['filemissingdesc'] = 'File %s%s is missing from server';
 $string['Field'] = 'Field';
 $string['Value'] = 'Value';
 $string['datathatwillbesent'] = 'Data that will be sent';
+$string['datathathavebeensent'] = 'Data that have been sent';
 $string['sendweeklyupdates'] = 'Send weekly updates?';
 $string['sendweeklyupdatesdescription1'] = 'If set to "On", your site will send weekly updates to mahara.org with some statistics about your site.';
 $string['Register'] = 'Register';
+$string['registrationcancelled'] = 'You can choose to register at any time by going to the <a href="%sadmin/registersite.php">site registration page</a>.';
 $string['registrationfailedtrylater'] = 'Registration failed with error code %s. Please try again later.';
 $string['registrationsuccessfulthanksforregistering'] = 'Registration successful - thanks for registering.';
 $string['registeryourmaharasite'] = 'Register your Mahara site';
@@ -240,6 +242,7 @@ $string['registeryourmaharasitedetail'] = '
 <p>If you tick &quot;send weekly updates&quot;, Mahara will automatically send an update to mahara.org once a week with your updated information.</p>
 <p>Registering will remove this notice. You will be able to change whether you send weekly updates on the <a href="%sadmin/site/options.php">site options</a> page.</p>';
 $string['siteregistered'] = 'Your site has been registered. You can turn weekly updates on and off on the <a href="%sadmin/site/options.php">site options</a> page.</p>';
+$string['newsiteregistrationpolicy'] = '<p>Recently, we have updated the policy to send data to mahara.org. Please confirm your registration.</p>';
 
 // Close site
 $string['Close'] = 'Close';
@@ -264,6 +267,7 @@ $string['viewsperuser'] = 'Users who make pages have about %s pages each';
 $string['Cron'] = 'Cron';
 $string['runningnormally'] = 'Running normally';
 $string['cronnotrunning1'] = '<span class="error">Cron is not running.</span><br>See the <a href="http://wiki.mahara.org/System_Administrator\'s_Guide/Installing_Mahara">installation guide</a> for instructions on how to set it up. If you have already set up cron, one or more of its activities have failed to run recently.';
+$string['cronnotrunningsiteclosed'] = '<span class="error">Cron is not running.</span><br>The site is currently closed. Please re-open the site for the cron to run.';
 $string['Loggedin'] = 'Logged in';
 $string['youraverageuser'] = 'Your average user...';
 $string['statsmaxfriends1'] = array(
@@ -753,6 +757,7 @@ $string['resetpassword'] = 'Reset password';
 $string['resetpassworddescription'] = 'If you enter text here, it will replace the user\'s current password.';
 $string['forcepasswordchange'] = 'Force password change on next login';
 $string['forcepasswordchangedescription'] = 'The user will be directed to a "Change password" page the next time they login.';
+$string['primaryemail'] = 'Primary email';
 $string['sitestaff'] = 'Site staff';
 $string['siteadmins'] = 'Site administrators';
 $string['siteadmin'] = 'Site administrator';
@@ -1142,6 +1147,8 @@ $string['usershavenotloggedinsince'] = 'Users have not logged in since';
 
 // Admin user search duplicate email filter
 $string['duplicateemailfilter'] = 'Filter by duplicate email addresses:';
+
+$string['noemailfound'] = 'No email address found';
 
 $string['lastlogin'] = 'Last login';
 

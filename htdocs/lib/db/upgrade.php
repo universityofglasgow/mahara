@@ -3326,7 +3326,32 @@ function xmldb_core_upgrade($oldversion=0) {
         // Fill the new field with path data.
         // Set all artefacts to the path they'd have if they have no parent.
         log_debug('Filling in parent artefact paths');
-        execute_sql("UPDATE {artefact} SET path = '/' || id WHERE parent IS NULL");
+        if (get_config('searchplugin') == 'elasticsearch') {
+            log_debug('Dropping elasticsearch artefact triggers');
+            require_once(get_config('docroot') . 'search/elasticsearch/lib.php');
+            ElasticsearchIndexing::drop_triggers('artefact');
+        }
+        $count = 0;
+        $limit = 1000;
+        $limitsmall = 200;
+        $total = count_records_select('artefact', 'path IS NULL AND parent IS NULL');
+        for ($i = 0; $i <= $total; $i += $limitsmall) {
+            if (is_mysql()) {
+                execute_sql("UPDATE {artefact} SET path = CONCAT('/', id) WHERE path IS NULL AND parent IS NULL LIMIT " . $limitsmall);
+            }
+            else {
+                // Postgres can only handle limit in subquery
+                execute_sql("UPDATE {artefact} SET path = CONCAT('/', id) WHERE id IN (SELECT id FROM {artefact} WHERE path IS NULL AND parent IS NULL LIMIT " . $limitsmall . ")");
+            }
+            $count += $limitsmall;
+            if (($count % $limit) == 0 || $count >= $total) {
+                if ($count > $total) {
+                    $count = $total;
+                }
+                log_debug("$count/$total");
+                set_time_limit(30);
+            }
+        }
         $newcount = count_records_select('artefact', 'path IS NULL');
         if ($newcount) {
             $childlevel = 0;
@@ -3362,6 +3387,10 @@ function xmldb_core_upgrade($oldversion=0) {
                 // so stop looping if the count stops going down.
             } while ($newcount > 0 && $newcount < $lastcount);
             log_debug("Done filling in child artefact paths");
+        }
+        if (get_config('searchplugin') == 'elasticsearch') {
+            log_debug("Add triggers back in");
+            ElasticsearchIndexing::create_triggers('artefact');
         }
     }
 
@@ -3399,7 +3428,7 @@ function xmldb_core_upgrade($oldversion=0) {
                 $todb->objectid   = $record->view;
                 $todb->reportedby = 0;
                 $todb->report = '';
-                $todb->reportedtime = $record->ctime;
+                $todb->reportedtime = ($record->ctime) ? $record->ctime : format_date(time());
                 if (!empty($record->stopdate)) {
                     // Since we can't get an ID of a user who resolved an issue, use root ID.
                     $todb->resolvedby = 0;
@@ -3976,17 +4005,25 @@ function xmldb_core_upgrade($oldversion=0) {
         log_debug("Updating TinyMCE emoticon locations in mahara database");
         // Seeing as tinymce has moved the location of the emoticons
         // we need to fix up a few places where users could have added emoticons.
-        // $replacements is key = table, value = column
-        $replacements = array('view' => 'description',
-                              'artefact' => 'title',
-                              'artefact' => 'description',
-                              'group' => 'description',
-                              'interaction_forum_post' => 'body',
-                              'notification_internal_activity' => 'message',
-                              'blocktype_wall_post' => 'text',
-                              'site_content' => 'content');
+        // $replacements is $value['table'] = table, $value['column'] = column
+        $replacements = array(array('table' => 'view',
+                              'column' => 'description'),
+                        array('table' => 'artefact',
+                              'column' => 'title'),
+                        array('table' => 'artefact',
+                              'column' => 'description'),
+                        array('table' => 'group',
+                              'column' => 'description'),
+                        array('table' => 'interaction_forum_post',
+                              'column' => 'body'),
+                        array('table' => 'notification_internal_activity',
+                              'column' => 'message'),
+                        array('table' => 'blocktype_wall_post',
+                              'column' => 'text'),
+                        array('table' => 'site_content',
+                              'column' => 'content'));
         foreach ($replacements as $key => $value) {
-            execute_sql("UPDATE {" . $key . "} SET " . $value . " = REPLACE(" . $value . ", '/emotions/img', '/emoticons/img') WHERE " . $value . " LIKE '%/emotions/img%'");
+            execute_sql("UPDATE {" . $value['table'] . "} SET " . $value['column'] . " = REPLACE(" . $value['column'] . ", '/emotions/img', '/emoticons/img') WHERE " . $value['column'] . " LIKE '%/emotions/img%'");
         }
         // we need to handle block_instance configdata in a special way
         if ($results = get_records_sql_array("SELECT id FROM {block_instance} WHERE configdata LIKE '%/emotions/img%'", array())) {
@@ -3998,7 +4035,7 @@ function xmldb_core_upgrade($oldversion=0) {
                 $bi = new BlockInstance($result->id);
                 $configdata = $bi->get('configdata');
                 foreach ($configdata as $key => $value) {
-                    $configdata[$key] = preg_replace('/\/emotions\/img/', '/emotions/img', $value);
+                    $configdata[$key] = preg_replace('/\/emotions\/img/', '/emoticons/img', $value);
                 }
                 $bi->set('configdata', $configdata);
                 $bi->commit();
@@ -4024,6 +4061,18 @@ function xmldb_core_upgrade($oldversion=0) {
         require_once(get_config('libroot').'dwoo/dwoo/Dwoo/Core.php');
         @unlink(get_config('dataroot') . 'dwoo/compile/default' . get_config('docroot') . 'theme/raw/' . 'templates/view/accesslistrow.tpl.d'.Dwoo_Core::RELEASE_TAG.'.php');
         @unlink(get_config('dataroot') . 'dwoo/compile/default' . get_config('docroot') . 'theme/raw/' . 'templates/admin/users/accesslistitem.tpl.d'.Dwoo_Core::RELEASE_TAG.'.php');
+    }
+
+    if ($oldversion < 2015030416) {
+        // As we changed the registration site policy,
+        // We need to remind the site admins to register the site again with the new policy.
+        log_debug('Remind the site admins to register the site again with the new policy');
+        if (get_config('new_registration_policy') != -1) {
+            set_config('new_registration_policy', true);
+        }
+        if (get_config('registration_sendweeklyupdates')) {
+            set_config('registration_sendweeklyupdates', false);
+        }
     }
 
     return $status;

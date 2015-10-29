@@ -503,7 +503,6 @@ function auth_setup () {
         // specify login data immediately
         require_once('pieforms/pieform.php');
         $form = new Pieform(auth_get_login_form());
-        $SESSION->loginform = $form;
         if ($USER->is_logged_in()) {
             return;
         }
@@ -1894,7 +1893,7 @@ function auth_handle_institution_expiries() {
  * out session files of users whose sessions have timed out.
  */
 function auth_remove_old_session_files() {
-    $basedir = get_config('dataroot') . 'sessions/';
+    $basedir = get_config('sessionpath');
 
     // delete sessions older than the session timeout plus 2 days
     $mintime = time() - get_config('session_timeout') - 2 * 24 * 60 * 60;
@@ -1939,9 +1938,6 @@ function auth_generate_login_form() {
     require_once('pieforms/pieform.php');
     if (!get_config('installed')) {
         return;
-    }
-    else if ($SESSION->loginform) {
-        return get_login_form_js($SESSION->loginform->build());
     }
     $elements = auth_get_login_form_elements();
     $loginform = get_login_form_js(pieform(array(

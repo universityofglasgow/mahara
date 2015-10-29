@@ -67,7 +67,7 @@ Mahara 15.04 requires:
  * Web Browser: Mahara should be accessible in any modern web browser with
    Javascript support. However, it is only actively tested in the most recent
    versions of Firefox, Chrome, Safari, and Opera; and the last three versions
-   of IE. For Mahara 1.9.0, these versions are:
+   of IE. For Mahara 15.04, these versions are:
  ** Firefox - 24.0
  ** Chrome - 34.0
  ** Safari - 6.0
@@ -89,7 +89,7 @@ MOODLE: Documentation on integrating Mahara with Moodle can be found in the
 Copyright notice
 ----------------
 
-Copyright (C) 2006-2014 Catalyst IT and others; see:
+Copyright (C) 2006-2015 Catalyst IT and others; see:
 https://wiki.mahara.org/index.php/Contributors
 
 This program is free software: you can redistribute it and/or modify

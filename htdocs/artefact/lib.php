@@ -260,13 +260,13 @@ abstract class ArtefactType implements IArtefactType {
     protected $id;
     protected $artefacttype;
     protected $owner;
-    protected $container;
+    protected $container = 0;
     protected $parent;
     protected $oldparent;
     protected $ctime;
     protected $mtime;
     protected $atime;
-    protected $locked;
+    protected $locked = 0;
     protected $title;
     protected $description;
     protected $note;
@@ -275,8 +275,8 @@ abstract class ArtefactType implements IArtefactType {
     protected $group;
     protected $author;
     protected $authorname;
-    protected $allowcomments;
-    protected $approvecomments;
+    protected $allowcomments = 0;
+    protected $approvecomments = 0;
     protected $rolepermissions;
     protected $mtimemanuallyset;
     protected $license;
@@ -323,7 +323,9 @@ abstract class ArtefactType implements IArtefactType {
         foreach ((array)$data as $field => $value) {
             if (property_exists($this, $field)) {
                 if (in_array($field, array('atime', 'ctime', 'mtime'))) {
-                    $value = strtotime($value);
+                    if (!(!empty($value) && is_string($value) && $value = strtotime($value))) {
+                        $value = time();
+                    }
                 }
                 if ($field == 'tags' && !is_array($value)) {
                     $value = preg_split("/\s*,\s*/", trim($value));
@@ -1729,10 +1731,6 @@ function artefact_instance_from_type($artefact_type, $user_id=null) {
 
     safe_require('artefact', get_field('artefact_installed_type', 'plugin', 'name', $artefact_type));
 
-    if (!call_static_method(generate_artefact_class_name($artefact_type), 'is_singular')) {
-        throw new ArtefactNotFoundException("This artefact type is not a 'singular' artefact type");
-    }
-
     // email is special (as in the user can have more than one of them, but
     // it's treated as a 0 or 1 artefact and the primary is returned
     if ($artefact_type == 'email') {
@@ -1747,6 +1745,9 @@ function artefact_instance_from_type($artefact_type, $user_id=null) {
         return new $classname($id);
     }
     else {
+        if (!call_static_method(generate_artefact_class_name($artefact_type), 'is_singular')) {
+            throw new ArtefactNotFoundException("This artefact type is not a 'singular' artefact type");
+        }
         $sql = 'SELECT a.*, i.plugin
                 FROM {artefact} a
                 JOIN {artefact_installed_type} i ON a.artefacttype = i.name
@@ -1777,20 +1778,47 @@ function artefact_get_descendants(array $ids) {
     if (empty($ids)) {
         return array();
     }
-    if ($aids = get_column_sql('
-            SELECT DISTINCT id
-            FROM {artefact}
-            WHERE ' . join(' OR ', array_map(
-                function($id) {
-                    return 'path LIKE ' . db_quote('%/' . db_like_escape($id) . '/%');
-                }
-                , $ids)) . '
-            ORDER BY id'
-        )) {
-        return array_merge($ids, array_values($aids));
+    if (get_config('version') < 2014050901) {
+        $seen = array();
+        $new = $ids;
+        if (!empty($new)) {
+            $new = array_combine($new, $new);
+        }
+        while (!empty($new)) {
+            $seen = $seen + $new;
+            $children = get_column_sql('
+                SELECT id
+                FROM {artefact}
+                WHERE parent IN (' . implode(',', array_map('intval', $new)) . ')
+                    AND id NOT IN (' . implode(',', array_map('intval', $seen)) . ')'
+                , array());
+            if ($children) {
+                $new = array_diff($children, $seen);
+                $new = array_combine($new, $new);
+            }
+            else {
+                $new = array();
+            }
+        }
+        return array_values($seen);
     }
     else {
-        return $ids;
+        // The column 'path' has been added since mahara 1.10
+        if ($aids = get_column_sql('
+                SELECT DISTINCT id
+                FROM {artefact}
+                WHERE ' . join(' OR ', array_map(
+                    function($id) {
+                        return 'path LIKE ' . db_quote('%/' . db_like_escape($id) . '/%');
+                    }
+                    , $ids)) . '
+                ORDER BY id'
+            )) {
+            return array_merge($ids, array_values($aids));
+        }
+        else {
+            return $ids;
+        }
     }
 }
 

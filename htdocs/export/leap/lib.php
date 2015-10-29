@@ -156,6 +156,10 @@ class PluginExportLeap extends PluginExport {
         $this->export_footer();
         $this->notify_progress_callback(90, get_string('writingfiles', 'export'));
 
+        // Filter invalid XML characters out of the final product
+        require_once('file.php');
+        $this->xml = preg_replace(xml_filter_regex(), '', $this->xml);
+
         // write out xml to a file
         if (!file_put_contents($this->exportdir . $this->leapfile, $this->xml)) {
             $SESSION->add_error_msg(get_string('couldnotwriteLEAPdata', 'export'));
@@ -321,19 +325,22 @@ class PluginExportLeap extends PluginExport {
 
     // Some links can be determined in advance
     private function setup_links() {
-        if (empty($this->views) || empty($this->artefacts)) {
+
+        // If there are no pages, no links to set up.
+        if (empty($this->views)) {
             return;
         }
 
         $viewlist = join(',', array_keys($this->views));
-        $artefactlist = join(',', array_keys($this->artefacts));
 
         // Views in collections
         if ($this->collections) {
             $collectionlist = join(',', array_keys($this->collections));
             $records = get_records_select_array(
                 'collection_view',
-                "view IN ($viewlist) AND collection IN ($collectionlist)"
+                "view IN ($viewlist) AND collection IN ($collectionlist)",
+                array(),
+                'displayorder'
             );
             if ($records) {
                 foreach ($records as &$r) {
@@ -342,6 +349,13 @@ class PluginExportLeap extends PluginExport {
                 }
             }
         }
+
+        // If there are no artefacts, no need to try to set those up.
+        if (empty($this->artefacts)) {
+            return;
+        }
+
+        $artefactlist = join(',', array_keys($this->artefacts));
 
         // Artefacts directly in views
         $records = get_records_select_array(

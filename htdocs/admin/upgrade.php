@@ -26,6 +26,9 @@ if (param_integer('finished', 0)) {
         $message .= '  ' . get_string('ensurepluginsexist', 'admin', get_config('docroot'));
         $SESSION->add_error_msg($message);
     }
+    if (get_config('new_registration_policy') == 1) {
+        redirect('/admin/registersite.php');
+    }
     redirect();
 }
 
@@ -122,8 +125,6 @@ $localsuccess  = json_encode(get_string('localdatasuccess', 'admin'));
 // Check if Mahara is being installed. An extra hook is required to insert core
 // data if so.
 if (!empty($upgrades['core']->install)) {
-    raise_time_limit(120);
-    raise_memory_limit('256M');
     $upgrades['firstcoredata'] = true;
     $upgrades['localpreinst'] = true;
     $upgrades['lastcoredata'] = true;

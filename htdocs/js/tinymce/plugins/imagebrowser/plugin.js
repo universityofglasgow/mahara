@@ -36,9 +36,16 @@ tinymce.PluginManager.add('imagebrowser', function(editor) {
 
         width = dom.getAttrib(imgElm, 'width');
         height = dom.getAttrib(imgElm, 'height');
-
+        var selected = null;
         if (imgElm.nodeName == 'IMG' && !imgElm.getAttribute('data-mce-object') && !imgElm.getAttribute('data-mce-placeholder')) {
             // existing values
+            var urlquerystr = dom.getAttrib(imgElm, 'src').match(/\?.+/)[0];
+            var urlparts = urlquerystr.split('&');
+            for (var x in urlparts) {
+                if (urlparts[x].match('file=')) {
+                    selected = urlparts[x].split('=')[1];
+                }
+            }
             data = {
                 src: dom.getAttrib(imgElm, 'src'),
                 alt: dom.getAttrib(imgElm, 'alt'),
@@ -84,7 +91,7 @@ tinymce.PluginManager.add('imagebrowser', function(editor) {
         } else if (jQuery('input[name="group"]').length) {
             group = jQuery('input[name="group"]').val();
         }
-        var pd = {'id': viewid, 'post': postid, 'blogid': blogid, 'blogpostid': blogpostid, 'group': group, 'change': 1};
+        var pd = {'id': viewid, 'post': postid, 'blogid': blogid, 'blogpostid': blogpostid, 'group': group, 'selected': selected, 'change': 1};
 
         sendjsonrequest(config['wwwroot'] + 'json/imagebrowser.json.php', pd, 'POST', function(ibdata) {
             addImageBrowser(ibdata);
@@ -161,6 +168,27 @@ tinymce.PluginManager.add('imagebrowser', function(editor) {
             if (deletebutton.length) {
                 deletebutton.focus();
             }
+
+            // As we have several submit buttons in the form
+            // Add the attribute clicked=true to the clicked button
+            // This will help identify which submit button was clicked
+            jQuery('form' + formname + ' input[type=submit], button[type=submit]').click(function() {
+                jQuery("input[type=submit], button[type=submit]", jQuery(this).parents('form' + formname)).removeAttr("clicked");
+                // Add the submit button name/value as a hidden field to get this to work in FF
+                if (jQuery('#edit_file').length) {
+                    jQuery('#edit_file').prop('name', jQuery(this).context.name).prop('value', jQuery(this).context.value);
+                }
+                else {
+                    jQuery('<input>').attr({
+                        type: 'hidden',
+                        id: 'edit_file',
+                        name: jQuery(this).context.name,
+                        value: jQuery(this).context.value
+                    }).appendTo(jQuery(this).parents('form' + formname));
+                }
+                jQuery(this).attr("clicked", "true");
+            });
+
         } // end of addImageBrowser()
 
         function getSelectedImageUrl() {
@@ -174,77 +202,103 @@ tinymce.PluginManager.add('imagebrowser', function(editor) {
             return url;
         }
 
-        function onSubmitForm() {
-            function waitLoad(imgElm) {
-                function selectImage() {
-                    imgElm.onload = imgElm.onerror = null;
-                    editor.selection.select(imgElm);
-                    editor.nodeChanged();
+        function getSelectedObject() {
+            // As we can only select one image at a time we can accept the first in the array as selected item
+            var keys = Object.keys(window.imgbrowserconf_artefactid.selecteddata);
+            var selected = window.imgbrowserconf_artefactid.selecteddata[keys[0]];
+            if (selected) {
+                return selected;
+            }
+            return null;
+        }
+
+        function onSubmitForm(e) {
+            // Find which submit button was clicked
+            var clickedButton = jQuery('form' + formname + " input[type=submit][clicked=true]");
+            if ((clickedButton.length > 0)
+                && ('#' + clickedButton[0].id == formname + '_artefactid_edit_artefact')) {
+                var fileBrowserForm = window["imgbrowserconf_artefactid"];
+                if (fileBrowserForm) {
+                    fileBrowserForm.submitform();
                 }
-
-                imgElm.onload = function() {
-                    if (!data.width && !data.height) {
-                        dom.setAttribs(imgElm, {
-                            width: imgElm.clientWidth,
-                            height: imgElm.clientHeight
-                        });
-                    }
-                    selectImage();
-                };
-
-                imgElm.onerror = selectImage;
             }
-
-            updateStyle();
-            recalcSize();
-
-            var data = getFormVals();
-
-            if (data.width === '') {
-                data.width = null;
-            }
-
-            if (data.height === '') {
-                data.height = null;
-            }
-
-            if (data.style === '') {
-                data.style = null;
-            }
-
-            data = {
-                src: data.src,
-                alt: data.alt,
-                width: data.width,
-                height: data.height,
-                style: data.style
-            };
-
-            editor.undoManager.transact(function() {
-                if (!data.src) {
-                    if (imgElm) {
-                        dom.remove(imgElm);
+            else {
+                function waitLoad(imgElm) {
+                    function selectImage() {
+                        imgElm.onload = imgElm.onerror = null;
+                        editor.selection.select(imgElm);
                         editor.nodeChanged();
                     }
-                    return;
+
+                    imgElm.onload = function() {
+                        if (!data.width && !data.height) {
+                            dom.setAttribs(imgElm, {
+                                width: imgElm.clientWidth,
+                                height: imgElm.clientHeight
+                            });
+                        }
+                        selectImage();
+                    };
+
+                    imgElm.onerror = selectImage;
                 }
 
-                if (!imgElm) {
-                    data.id = '__mcenew';
-                    editor.focus();
-                    editor.selection.setContent(dom.createHTML('img', data));
-                    imgElm = dom.get('__mcenew');
-                    dom.setAttrib(imgElm, 'id', null);
-                } else {
-                    dom.setAttribs(imgElm, data);
+                updateStyle();
+                recalcSize();
+
+                var data = getFormVals();
+
+                if (data.width === '') {
+                    data.width = null;
                 }
 
-                waitLoad(imgElm);
-            });
-            if (jQuery('#configureblock').length) {
-                jQuery('#configureblock').removeClass('hidden');
+                if (data.height === '') {
+                    data.height = null;
+                }
+
+                if (data.style === '') {
+                    data.style = null;
+                }
+
+                var selected = getSelectedObject();
+                if (selected) {
+                    data.alt = selected.description ? selected.description : selected.title;
+                }
+
+                data = {
+                    src: data.src,
+                    alt: data.alt,
+                    width: data.width,
+                    height: data.height,
+                    style: data.style
+                };
+
+                editor.undoManager.transact(function() {
+                    if (!data.src) {
+                        if (imgElm) {
+                            dom.remove(imgElm);
+                            editor.nodeChanged();
+                        }
+                        return;
+                    }
+
+                    if (!imgElm) {
+                        data.id = '__mcenew';
+                        editor.focus();
+                        editor.selection.setContent(dom.createHTML('img', data));
+                        imgElm = dom.get('__mcenew');
+                        dom.setAttrib(imgElm, 'id', null);
+                    } else {
+                        dom.setAttribs(imgElm, data);
+                    }
+
+                    waitLoad(imgElm);
+                });
+                if (jQuery('#configureblock').length) {
+                    jQuery('#configureblock').removeClass('hidden');
+                }
+                removeImageBrowser();
             }
-            removeImageBrowser();
         } // end onSubmitForm
 
         function removeImageBrowser() {
@@ -446,6 +500,8 @@ tinymce.PluginManager.add('imagebrowser', function(editor) {
 
         var h = Math.max(d.h, 200);
         var w = Math.max(d.w, 500);
+        style.maxHeight = '90vh';
+        style.overflow = 'auto';
         if (config.blockeditormaxwidth && jQuery(block).find('textarea.wysiwyg').length) {
             w = vpdim.w - 80;
             style.height = h + 'px';

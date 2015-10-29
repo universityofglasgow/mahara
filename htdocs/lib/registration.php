@@ -59,8 +59,8 @@ EOF;
                 'defaultvalue' => true,
             ),
             'register' => array(
-                'type' => 'submit',
-                'value' => get_string('Register', 'admin'),
+                'type' => 'submitcancel',
+                'value' => array(get_string('Register', 'admin'), get_string('cancel', 'mahara')),
             ),
         )
      );
@@ -83,11 +83,45 @@ function register_submit(Pieform $form, $values) {
     else {
         set_config('registration_lastsent', time());
         set_config('registration_sendweeklyupdates', $values['sendweeklyupdates']);
+        if (get_config('new_registration_policy')) {
+            set_config('new_registration_policy', false);
+        }
         $SESSION->add_ok_msg(get_string('registrationsuccessfulthanksforregistering', 'admin'));
+        $info = '
+<h4>' . get_string('datathathavebeensent', 'admin') . '</h4>
+<table class="table table-striped table-bordered">
+    <thead>
+        <tr>
+            <th> ' . get_string('Field', 'admin') . '</th>
+            <th> ' . get_string('Value', 'admin') . '</th>
+        </tr>
+    </thead>
+    <tbody>
+';
+        $datasent = registration_data();
+        foreach($datasent as $key => $val) {
+            $info .= '<tr><th>'. hsc($key) . '</th><td>' . hsc($val) . "</td></tr>\n";
+        }
+        $info .= '</tbody></table>';
+
+        $SESSION->add_ok_msg($info, false);
     }
-    redirect('/admin/');
+    redirect('/admin/index.php');
 }
 
+/**
+ * Runs when registration form is cancelled
+ */
+function register_cancel_register() {
+    global $SESSION;
+
+    if (get_config('new_registration_policy')) {
+        set_config('new_registration_policy', -1);
+        $SESSION->add_ok_msg(get_string('registrationcancelled', 'admin', get_config('wwwroot')), false);
+    }
+
+    redirect('/admin/index.php');
+}
 
 /**
  * Worker - performs sending of registration data to mahara.org
@@ -137,6 +171,28 @@ function registration_data() {
         'release') as $key) {
         $data_to_send[$key] = get_config($key);
     }
+
+    // System information
+    $data_to_send['phpversion'] = phpversion();
+    $data_to_send['dbversion'] = get_field_sql('SELECT VERSION()');
+    $osversion = php_uname('s');
+    if ($osversion == 'Linux') {
+        $lsbversion = exec('lsb_release -d', $execout, $return_val);
+        if ($return_val === 0) {
+            $osversion = $lsbversion;
+        }
+        else {
+            $osversion = php_uname();
+        }
+    }
+    $data_to_send['osversion'] = $osversion;
+    $data_to_send['phpsapi'] = php_sapi_name();
+    if (!empty($_SERVER) && !empty($_SERVER['SERVER_SOFTWARE'])) {
+        $data_to_send['webserver'] = $_SERVER['SERVER_SOFTWARE'];
+    }
+    $modules = get_loaded_extensions();
+    natcasesort($modules);
+    $data_to_send['phpmodules'] = '; ' . implode('; ', $modules) . ';';
 
     foreach (array(
         'usr_friend',
@@ -212,21 +268,21 @@ function institution_registration_data() {
     foreach (get_column('institution', 'name') as $institution) {
         $inst_data = array();
         if ($institution == 'mahara') {
-            $members = get_column_sql('SELECT id
-                    FROM {usr}
-                    WHERE deleted = 0 AND id > 0 AND id NOT IN
-                        (SELECT usr FROM {usr_institution})
-                    ', array());
+            $membersquery = 'SELECT id FROM {usr}
+                    WHERE deleted = 0 AND id > 0 AND
+                    id NOT IN (SELECT usr FROM {usr_institution})';
+            $membersqueryparams = array();
         }
         else {
-            $members = get_column_sql('SELECT usr
-                    FROM {usr_institution} ui
+            $membersquery = 'SELECT usr FROM {usr_institution} ui
                     JOIN {usr} u ON (u.id = ui.usr)
-                    WHERE u.deleted = 0 AND ui.institution = ?
-                    ', array($institution));
+                    WHERE u.deleted = 0 AND ui.institution = ?';
+            $membersqueryparams = array($institution);
         }
-        $inst_data['count_members'] =  count($members);
-        if (!$members) {
+        $inst_data['count_members'] = count_records_sql('SELECT count(*) FROM {usr}
+                WHERE id IN (' . $membersquery . ')',
+                $membersqueryparams);
+        if ($inst_data['count_members'] == 0) {
             $inst_data['count_views'] = 0;
             $inst_data['count_blocks'] = 0;
             $inst_data['count_artefacts'] = 0;
@@ -239,14 +295,14 @@ function institution_registration_data() {
         if ($data = get_records_sql_array('SELECT tmp.type, SUM(tmp.count) AS count
                 FROM (SELECT v.type, COUNT(*) AS count
                     FROM {view} v
-                    WHERE v.owner IS NOT NULL AND v.owner IN (' . join(',', array_fill(0, count($members), '?')) . ')
+                    WHERE v.owner IS NOT NULL AND v.owner IN (' . $membersquery . ')
                     GROUP BY v.type
                 UNION ALL
                     SELECT v.type, COUNT(*) AS count
                     FROM {view} v
                     WHERE v.institution IS NOT NULL AND v.institution = ?
                     GROUP BY v.type
-                ) tmp GROUP BY tmp.type', array_merge($members, array($institution)))) {
+                ) tmp GROUP BY tmp.type', array_merge($membersqueryparams, array($institution)))) {
             foreach ($data as $viewtypeinfo) {
                 $inst_data['view_type_' . $viewtypeinfo->type] = $viewtypeinfo->count;
                 $inst_data['count_views'] += $viewtypeinfo->count;
@@ -257,7 +313,7 @@ function institution_registration_data() {
                 FROM (SELECT bi.blocktype AS type, COUNT(*) AS count
                     FROM {block_instance} bi
                     JOIN {view} v ON v.id = bi.view
-                    WHERE v.owner IS NOT NULL AND v.owner IN (' . join(',', array_fill(0, count($members), '?')) . ')
+                    WHERE v.owner IS NOT NULL AND v.owner IN (' . $membersquery . ')
                     GROUP BY bi.blocktype
                 UNION ALL
                     SELECT bi.blocktype AS type, COUNT(*) AS count
@@ -265,7 +321,7 @@ function institution_registration_data() {
                     JOIN {view} v ON v.id = bi.view
                     WHERE v.institution IS NOT NULL AND v.institution = ?
                     GROUP BY bi.blocktype
-                ) tmp GROUP BY tmp.type', array_merge($members, array($institution)))) {
+                ) tmp GROUP BY tmp.type', array_merge($membersqueryparams, array($institution)))) {
             foreach ($data as $blocktypeinfo) {
                 $inst_data['blocktype_' . $blocktypeinfo->type] = $blocktypeinfo->count;
                 $inst_data['count_blocks'] += $blocktypeinfo->count;
@@ -274,16 +330,16 @@ function institution_registration_data() {
         $inst_data['count_artefacts'] = 0;
         if ($data = get_records_sql_array('SELECT a.artefacttype AS type, COUNT(*) AS count
                 FROM {artefact} a
-                WHERE a.author IN (' . join(',', array_fill(0, count($members), '?')) . ')
-                GROUP BY a.artefacttype', $members)) {
+                WHERE a.author IN (' . $membersquery . ')
+                GROUP BY a.artefacttype', $membersqueryparams)) {
             foreach ($data as $artefacttypeinfo) {
                 $inst_data['artefact_type_' . $artefacttypeinfo->type] = $artefacttypeinfo->count;
                 $inst_data['count_artefacts'] += $artefacttypeinfo->count;
             }
         }
         $inst_data['count_interaction_forum_post'] = count_records_select('interaction_forum_post',
-                'poster IN (' . join(',', array_fill(0, count($members), '?')) . ')',
-                $members);
+                'poster IN (' . $membersquery . ')',
+                $membersqueryparams);
         if (is_postgres()) {
             $weekago = "CURRENT_DATE - INTERVAL '1 week'";
             $thisweeksql = "(lastaccess > $weekago)::int";
@@ -294,8 +350,8 @@ function institution_registration_data() {
         }
         if ($data = get_record_sql('SELECT SUM(' . $thisweeksql . ') AS sum
                 FROM {usr} u
-                WHERE u.id IN (' . join(',', array_fill(0, count($members), '?')) . ')',
-                $members)) {
+                WHERE u.id IN (' . $membersquery . ')',
+                $membersqueryparams)) {
             $inst_data['usersloggedin'] = isset($data->sum) ? $data->sum : 0;
         }
         else {
@@ -361,6 +417,7 @@ function site_statistics($full=false) {
     $data['dbsize']      = db_total_size();
     $data['diskusage']   = get_field('site_data', 'value', 'type', 'disk-usage');
     $data['cronrunning'] = !record_exists_select('cron', 'nextrun IS NULL OR nextrun < CURRENT_DATE');
+    $data['siteclosedbyadmin'] = get_config('siteclosedbyadmin');
 
     if ($latestversion = get_config('latest_version')) {
         $data['latest_version'] = $latestversion;
@@ -379,31 +436,31 @@ function site_statistics($full=false) {
 function institution_data_current($institution) {
     $data = array();
     if ($institution == 'mahara') {
-        $data['members'] = get_column_sql('SELECT id
-                FROM {usr}
+        $membersquery = 'SELECT id FROM {usr}
                 WHERE deleted = 0 AND id > 0 AND id NOT IN
-                    (SELECT usr FROM {usr_institution})
-                ', array());
+                (SELECT usr FROM {usr_institution})';
+        $membersqueryparams = array();
     }
     else {
-        $data['members'] = get_column_sql('SELECT usr
-                FROM {usr_institution} ui
+        $membersquery = 'SELECT usr FROM {usr_institution} ui
                 JOIN {usr} u ON (u.id = ui.usr)
-                WHERE u.deleted = 0 AND ui.institution = ?
-                ', array($institution));
+                WHERE u.deleted = 0 AND ui.institution = ?';
+        $membersqueryparams = array($institution);
     }
-    $data['users'] = count($data['members']);
+    $data['memberssql'] = $membersquery;
+    $data['memberssqlparams'] = $membersqueryparams;
+    $data['users'] = get_field_sql('SELECT COUNT(*) FROM (' . $membersquery . ') AS members', $membersqueryparams);
     if (!$data['users']) {
         $data['views'] = 0;
     }
     else {
         $data['viewids'] = get_column_sql('
                 SELECT id FROM {view}
-                    WHERE owner IS NOT NULL AND owner IN (' . join(',', array_fill(0, $data['users'], '?')) . ')
+                    WHERE owner IS NOT NULL AND owner IN (' . $membersquery . ')
                 UNION
                     SELECT id FROM {view}
                     WHERE institution IS NOT NULL AND institution = ?'
-                , array_merge($data['members'], array($institution)));
+                , array_merge($membersqueryparams, array($institution)));
         $data['views'] = count($data['viewids']);
     }
     return $data;
@@ -433,8 +490,8 @@ function institution_statistics($institution, $full=false) {
         }
         else {
             $sql = "SELECT SUM($todaysql) AS today, SUM($thisweeksql) AS thisweek, $weekago AS weekago, SUM($eversql) AS ever FROM {usr}
-                    WHERE id IN (" . join(',', array_fill(0, $data['users'], '?')) . ")";
-            $active = get_record_sql($sql, $data['members']);
+                    WHERE id IN (" . $data['memberssql'] . ")";
+            $active = get_record_sql($sql, $data['memberssqlparams']);
         }
         $data['usersloggedin'] = get_string('loggedinsince', 'admin', $active->today, $active->thisweek, format_date(strtotime($active->weekago), 'strftimedateshort'), $active->ever);
 
@@ -445,8 +502,8 @@ function institution_statistics($institution, $full=false) {
             $memberships = count_records_sql("
                 SELECT COUNT(*)
                 FROM {group_member} m JOIN {group} g ON g.id = m.group
-                WHERE g.deleted = 0 AND m.member IN (" . join(',', array_fill(0, $data['users'], '?')) . ")
-            ", $data['members']);
+                WHERE g.deleted = 0 AND m.member IN (" . $data['memberssql'] . ")
+            ", $data['memberssqlparams']);
             $data['groupmemberaverage'] = round($memberships/$data['users'], 1);
         }
         $data['strgroupmemberaverage'] = get_string('groupmemberaverage', 'admin', $data['groupmemberaverage']);
@@ -478,8 +535,8 @@ function institution_statistics($institution, $full=false) {
         $data['diskusage']   = get_field_sql("
             SELECT SUM(quotaused)
             FROM {usr}
-            WHERE deleted = 0 AND id IN (" . join(',', array_fill(0, $data['users'], '?')) . ")
-            ", $data['members']);
+            WHERE deleted = 0 AND id IN (" . $data['memberssql'] . ")
+            ", $data['memberssqlparams']);
     }
 
     return($data);
@@ -723,17 +780,18 @@ function institution_user_statistics($limit, $offset, &$institutiondata) {
             FROM {usr_friend}
             GROUP BY usr2
         ) f ON u.id = f.id
-        WHERE u.id IN (" . join(',', array_fill(0, $institutiondata['users'], '?')) . ")
+        WHERE u.id IN (" . $institutiondata['memberssql'] . ")
         GROUP BY u.id, u.firstname, u.lastname, u.preferredname, u.urlid
         ORDER BY friends DESC
-        LIMIT 1", $institutiondata['members']);
+        LIMIT 1", $institutiondata['memberssqlparams']);
     $maxfriends = $maxfriends[0];
     $meanfriends = count_records_sql('SELECT COUNT(*) FROM
                 (SELECT * FROM {usr_friend}
-                    WHERE usr1 IN (' . join(',', array_fill(0, $institutiondata['users'], '?')) . ')
+                    WHERE usr1 IN (' . $institutiondata['memberssql'] . ')
                 UNION ALL SELECT * FROM {usr_friend}
-                    WHERE usr2 IN (' . join(',', array_fill(0, $institutiondata['users'], '?')) . ')
-                ) tmp', array_merge($institutiondata['members'], $institutiondata['members'])) / $institutiondata['users'];
+                    WHERE usr2 IN (' . $institutiondata['memberssql'] . ')
+                ) tmp', array_merge($institutiondata['memberssqlparams'], $institutiondata['memberssqlparams'])) /
+                $institutiondata['users'];
     if ($maxfriends) {
         $data['strmaxfriends'] = get_string(
             'statsmaxfriends1',
@@ -750,10 +808,10 @@ function institution_user_statistics($limit, $offset, &$institutiondata) {
     $maxviews = get_records_sql_array("
         SELECT u.id, u.firstname, u.lastname, u.preferredname, u.urlid, COUNT(v.id) AS views
         FROM {usr} u JOIN {view} v ON u.id = v.owner
-        WHERE \"owner\" IN (" . join(',', array_fill(0, $institutiondata['users'], '?')) . ")
+        WHERE \"owner\" IN (" . $institutiondata['memberssql'] . ")
         GROUP BY u.id, u.firstname, u.lastname, u.preferredname, u.urlid
         ORDER BY views DESC
-        LIMIT 1", $institutiondata['members']);
+        LIMIT 1", $institutiondata['memberssqlparams']);
     $maxviews = $maxviews[0];
     if ($maxviews) {
         $data['strmaxviews'] = get_string(
@@ -771,10 +829,10 @@ function institution_user_statistics($limit, $offset, &$institutiondata) {
     $maxgroups = get_records_sql_array("
         SELECT u.id, u.firstname, u.lastname, u.preferredname, u.urlid, COUNT(m.group) AS groups
         FROM {usr} u JOIN {group_member} m ON u.id = m.member JOIN {group} g ON m.group = g.id
-        WHERE g.deleted = 0 AND u.id IN (" . join(',', array_fill(0, $institutiondata['users'], '?')) . ")
+        WHERE g.deleted = 0 AND u.id IN (" . $institutiondata['memberssql'] . ")
         GROUP BY u.id, u.firstname, u.lastname, u.preferredname, u.urlid
         ORDER BY groups DESC
-        LIMIT 1", $institutiondata['members']);
+        LIMIT 1", $institutiondata['memberssqlparams']);
     $maxgroups = $maxgroups[0];
     if ($maxgroups) {
         $data['strmaxgroups'] = get_string(
@@ -792,15 +850,15 @@ function institution_user_statistics($limit, $offset, &$institutiondata) {
     $maxquotaused = get_records_sql_array("
         SELECT id, firstname, lastname, preferredname, urlid, quotaused
         FROM {usr}
-        WHERE id IN (" . join(',', array_fill(0, $institutiondata['users'], '?')) . ")
+        WHERE id IN (" . $institutiondata['memberssql'] . ")
         ORDER BY quotaused DESC
-        LIMIT 1", $institutiondata['members']);
+        LIMIT 1", $institutiondata['memberssqlparams']);
     $maxquotaused = $maxquotaused[0];
     $avgquota = get_field_sql("
         SELECT AVG(quotaused)
         FROM {usr}
-        WHERE id IN (" . join(',', array_fill(0, $institutiondata['users'], '?')) . ")
-        ", $institutiondata['members']);
+        WHERE id IN (" . $institutiondata['memberssql'] . ")
+        ", $institutiondata['memberssqlparams']);
     $data['strmaxquotaused'] = get_string(
         'statsmaxquotaused1',
         'admin',

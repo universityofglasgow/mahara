@@ -78,6 +78,7 @@ class EmbeddedImage {
                 $imgnode->setAttribute('width', $image->getAttribute('width'));
                 $imgnode->setAttribute('height', $image->getAttribute('height'));
                 $imgnode->setAttribute('style', $image->getAttribute('style'));
+                $imgnode->setAttribute('alt', $image->getAttribute('alt'));
 
                 if (!empty($groupid)) {
                     $searchpattern = '`group=(\d+)`';
@@ -156,9 +157,10 @@ class EmbeddedImage {
         }
         else if ($resourcetype == 'blog') {
             // we deleted blog image above, now delete any embedded blogpost images for that blog
-            $blogpostids = get_records_array('artefact', 'parent', $resourceid, 'id DESC', 'id');
-            foreach ($blogpostids as $id) {
-                self::remove_embedded_images('blogpost', $id->id);
+            if ($blogpostids = get_records_array('artefact', 'parent', $resourceid, 'id DESC', 'id')) {
+                foreach ($blogpostids as $id) {
+                    self::remove_embedded_images('blogpost', $id->id);
+                }
             }
         }
     }

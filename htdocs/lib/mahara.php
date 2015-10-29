@@ -2935,6 +2935,9 @@ function get_max_upload_size($is_user) {
     else {
         $maxuploadsize = max(1024, min($postmaxsize - 4096, get_real_size(ini_get('upload_max_filesize'))));
     }
+    if (get_config('maxuploadsize')) {
+        $maxuploadsize = min($maxuploadsize, get_config('maxuploadsize'));
+    }
     if ($is_user) {
         $userquotaremaining = $USER->get('quota') - $USER->get('quotaused');
         $maxuploadsize = min($maxuploadsize, $userquotaremaining);
@@ -3759,8 +3762,8 @@ function cron_institution_data_daily() {
         $interval = is_postgres() ? "'1 day'" : '1 day';
         if ($current['users'] != 0) {
             $where = "lastaccess >= DATE(?) AND lastaccess < DATE(?)+ INTERVAL $interval";
-            $where .= " AND id IN (" . join(',', array_fill(0, $current['users'], '?')) . ")";
-            $loggedin = count_records_select('usr', $where, array_merge(array($time, $time), $current['members']));
+            $where .= " AND id IN (" . $current['memberssql'] . ")";
+            $loggedin = count_records_select('usr', $where, array_merge(array($time, $time), $current['memberssqlparams']));
         }
         else {
             $loggedin = 0;
@@ -3891,8 +3894,10 @@ function mahara_log($logname, $string) {
 
 function is_html_editor_enabled () {
     global $USER, $SESSION;
-    return ((!get_config('wysiwyg') && $USER->get_account_preference('wysiwyg')) ||
-        get_config('wysiwyg') == 'enable') && $SESSION->get('handheld_device') == false;
+    return (
+            (!get_config('wysiwyg') && $USER->get_account_preference('wysiwyg')) ||
+            (get_config('wysiwyg') == 'enable' && $USER->is_logged_in())
+           ) && $SESSION->get('handheld_device') == false;
 }
 
 /**
