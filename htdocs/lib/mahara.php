@@ -2790,11 +2790,15 @@ function perf_to_log($info=null) {
     }
 
     $logstring = 'PERF: ' .  strip_querystring(get_script_path()). ': ';
-    $logstring .= ' memory_total: '.$info['memory_total'].'B (' . display_size($info['memory_total']).') memory_growth: '.$info['memory_growth'].'B ('.display_size($info['memory_growth']).')';
+    if (isset($info['memory_total']) && isset($info['memory_growth'])) {
+        $logstring .= ' memory_total: '.$info['memory_total'].'B (' . display_size($info['memory_total']).') memory_growth: '.$info['memory_growth'].'B ('.display_size($info['memory_growth']).')';
+    }
     $logstring .= ' time: '.$info['realtime'].'s';
     $logstring .= ' includecount: '.$info['includecount'];
     $logstring .= ' dbqueries: '.$info['dbreads'] . ' reads, ' . $info['dbwrites'] . ' writes, ' . $info['dbcached'] . ' cached';
-    $logstring .= ' ticks: ' . $info['ticks']  . ' user: ' . $info['utime'] . ' sys: ' . $info['stime'] .' cuser: ' . $info['cutime'] . ' csys: ' . $info['cstime'];
+    if (isset($info['ticks']) && isset($info['utime']) && isset($info['stime']) && isset($info['cutime']) && isset($info['cstime'])) {
+        $logstring .= ' ticks: ' . $info['ticks']  . ' user: ' . $info['utime'] . ' sys: ' . $info['stime'] .' cuser: ' . $info['cutime'] . ' csys: ' . $info['cstime'];
+    }
     $logstring .= ' serverload: ' . $info['serverload'];
     log_debug($logstring);
 }
@@ -4255,4 +4259,49 @@ function set_progress_done($token, $data = array()) {
     $data['finished'] = TRUE;
 
     $SESSION->set_progress($token, $data);
+}
+
+/**
+ * Set libxml internal errors and entity loader
+ * state before accessing an external xml document
+ *
+ * @param boolean  $state The state to set the options to
+ */
+function libxml_before($state = true) {
+    $xmlstate = $xmlerrors = null;
+    if (function_exists('libxml_disable_entity_loader')) {
+        $xmlerrors = libxml_use_internal_errors($state);
+        $xmlstate = libxml_disable_entity_loader($state);
+
+        // Record these settings so we can go back them at the end, as a workaround
+        // to PHP bug https://bugs.php.net/bug.php?id=64938
+        if (!defined('MAHARA_LIBXML_ENTITY_LOADER_BEFORE')) {
+            define('MAHARA_LIBXML_USE_INTERNAL_ERRORS_BEFORE', $xmlerrors);
+            define('MAHARA_LIBXML_ENTITY_LOADER_BEFORE', $xmlstate);
+            register_shutdown_function('libxml_after');
+        }
+    }
+
+    return array($xmlstate, $xmlerrors);
+}
+
+/**
+ * Set libxml internal errors and entity loader
+ * state after accessing an external xml document
+ */
+function libxml_after() {
+    if (function_exists('libxml_disable_entity_loader')) {
+
+        if (defined('MAHARA_LIBXML_ENTITY_LOADER_BEFORE')) {
+            $xmlerrors = MAHARA_LIBXML_USE_INTERNAL_ERRORS_BEFORE;
+            $xmlstate = MAHARA_LIBXML_ENTITY_LOADER_BEFORE;
+        }
+        else {
+            $xmlerrors = true;
+            $xmlstate = true;
+        }
+
+        libxml_use_internal_errors($xmlerrors);
+        libxml_disable_entity_loader($xmlstate);
+    }
 }
