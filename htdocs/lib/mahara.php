@@ -2783,6 +2783,7 @@ function _get_views_trim_list(&$list, &$users, $limit, &$results) {
  */
 function artefact_in_view($artefact, $view) {
     if (!is_object($artefact)) {
+        require_once(get_config('docroot') . 'artefact/lib.php');
         $artefact = artefact_instance_from_id($artefact);
     }
 
@@ -2837,9 +2838,14 @@ function get_dir_contents($directory) {
  * @return string
  */
 function get_mahara_install_subdirectory() {
-    $wwwroot = get_config('wwwroot');
-    $wwwroot = preg_replace('#^https?://#', '', $wwwroot);
-    return substr($wwwroot, strpos($wwwroot, '/'));
+    $path = parse_url(get_config('wwwroot'), PHP_URL_PATH);
+    if (!strlen($path)) {
+        return '/';
+    }
+    if (substr($path, -1) !== '/') {
+        $path = $path . '/';
+    }
+    return $path;
 }
 
 /**
@@ -4023,7 +4029,7 @@ function is_html_editor_enabled () {
     return (
             (!get_config('wysiwyg') && $USER->get_account_preference('wysiwyg')) ||
             (get_config('wysiwyg') == 'enable' && $USER->is_logged_in())
-           ) && $SESSION->get('handheld_device') == false;
+           );
 }
 
 /**
@@ -4492,4 +4498,60 @@ function pieform_instance($data) {
 function pieform($data) {
     require_once(get_config('libroot') . 'pieforms/pieform.php');
     return Pieform::process($data);
+}
+
+/**
+ * Check if the given input is a serialized string
+ * @param varied $sstr
+ */
+function is_serialized_string($sstr) {
+    if (is_string($sstr)) {
+        return (preg_match('/^s:\d+:".*";$/s', $sstr) === 1);
+    }
+    return false;
+}
+
+/**
+ * Check if the given input is a valid serialized stdClass object of a skin attribute
+ * Each object's property can only be a string, integer or null
+ * @param string $sobj
+ */
+function is_valid_serialized_skin_attribute($sobj) {
+    if (is_string($sobj) && preg_match('/^O:8:"stdClass":\d+:{.*}$/s', $sobj)) {
+        // Make sure each property is a string, integer or null.
+        $pos = strpos($sobj, '{');
+        $sattrs = substr($sobj, $pos + 1, -1);
+        $cur = 0;
+        while ($cur < strlen($sattrs)) {
+            switch ($sattrs[$cur]) {
+                case 's':
+                    $cur+=2;
+                    $strsize = "";
+                    while ($sattrs[$cur] >= '0' && $sattrs[$cur] <= '9') {
+                        $strsize .= $sattrs[$cur];
+                        $cur++;
+                    }
+                    if ($sattrs[$cur] == ':') {
+                        $cur += (int) $strsize + 4;
+                    }
+                    break;
+                case 'i':
+                    $cur+=2;
+                    $strsize = "";
+                    while ($sattrs[$cur] >= '0' && $sattrs[$cur] <= '9') {
+                        $cur++;
+                    }
+                    $cur ++ ;
+                    break;
+                case 'N':
+                    $cur+=2;
+                    break;
+                default:
+                    // Wrong serialized format
+                    return false;
+            }
+        }
+        return true;
+    }
+    return false;
 }

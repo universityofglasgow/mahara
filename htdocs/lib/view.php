@@ -6167,7 +6167,11 @@ class View {
 
         $data = array();
         list($data['collections'], $data['views']) = self::get_views_and_collections($owner, $group, $institution);
-
+        foreach ($data['views'] as $k => $view) {
+            if ($view['template'] == self::SITE_TEMPLATE) {
+                unset($data['views'][$k]);
+            }
+        }
         // Remember one representative viewid in each collection
         $viewindex = array();
 
@@ -6358,6 +6362,17 @@ class View {
 
         ArtefactType::update_locked($userid);
         db_commit();
+    }
+
+    /**
+     * Indicates whether this view is a site template. (A site template is a special
+     * template page which is copied as the starting point whenever a new page is
+     * created.)
+     *
+     * @return boolean
+     */
+    public function is_site_template() {
+        return ($this->get('template') == View::SITE_TEMPLATE);
     }
 }
 
