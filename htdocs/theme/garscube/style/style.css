@@ -1,0 +1,40 @@
+body {
+    background-color: #ebf1f5;
+    color: #373a3c;
+}
+
+.navbar-default {
+    background-color: #385a4f;
+    border-color: #284139;
+}
+
+.navbar-toggle {
+    color: #fff;
+}
+
+.navbar-toggle:hover {
+    color: #385a4f;
+}
+
+.panel {
+    border: 1px solid #d3d8dc;
+    border-radius: 0;
+}
+
+.panel .panel-heading-nested, .panel>.panel-heading{
+    border-bottom: 1px solid #d3d8dc;
+    color: #fff;
+    background-color: #385a4f;
+}
+
+#lastminutes {
+    display: none;
+}
+
+.panel-heading span.help .icon {
+    color: #fff;
+}
+
+#loading-box {
+    color: #fff;
+}
