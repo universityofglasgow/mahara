@@ -3,6 +3,10 @@ body {
     color: #373a3c;
 }
 
+.expose {
+    background-color: #ebf1f5;
+}
+
 .navbar-default {
     background-color: #385a4f;
     border-color: #284139;
@@ -21,10 +25,16 @@ body {
     border-radius: 0;
 }
 
-.panel .panel-heading-nested, .panel>.panel-heading{
+.panel h3.panel-heading {
     border-bottom: 1px solid #d3d8dc;
     color: #fff;
     background-color: #385a4f;
+    padding: 10px 15px;
+}
+
+.panel .panel.wallpost {
+    border-left: none;
+    border-right: none;
 }
 
 #lastminutes {
@@ -37,4 +47,24 @@ body {
 
 #loading-box {
     color: #fff;
+}
+
+.panel .no-heading .block-container {
+    margin: 10px 15px;
+}
+
+.bt-groupviews .block {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+.bt-groupviews .block .list-group {
+    margin-left: -15px;
+    margin-right: -15px;
+}
+
+.bt-groupviews .block hr {
+    margin-left: -15px;
+    margin-right: -15px;
+    border-top-color: #ddd;
 }
